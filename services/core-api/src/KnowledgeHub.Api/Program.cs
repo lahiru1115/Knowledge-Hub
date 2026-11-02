@@ -48,7 +48,7 @@ builder.Services.AddScoped<ResourceService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<MetadataPreviewService>();
 builder.Services.AddScoped<IOutbox, OutboxWriter>();
-builder.Services.AddScoped<IOutboxHandler, AiEventPlaceholderHandler>();
+builder.Services.AddScoped<IOutboxHandler, AiIndexHandler>();
 builder.Services.AddScoped<IOutboxHandler, MetadataJobHandler>();
 builder.Services.AddScoped<AuditLog>();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();

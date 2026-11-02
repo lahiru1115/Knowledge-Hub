@@ -1,6 +1,7 @@
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
 using KnowledgeHub.Application.Library;
+using KnowledgeHub.Infrastructure.Ai;
 using KnowledgeHub.Infrastructure.Library;
 using KnowledgeHub.Infrastructure.Maintenance;
 using KnowledgeHub.Infrastructure.Metadata;
@@ -33,6 +34,8 @@ public static class DependencyInjection
         services.AddSingleton<OutboxProcessor>();
         services.AddHostedService<OutboxWorker>();
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
+        services.AddAiClient(configuration);
 
         services.AddOptions<MaintenanceOptions>().Bind(configuration.GetSection(MaintenanceOptions.Section));
         services.AddScoped<MaintenanceService>();

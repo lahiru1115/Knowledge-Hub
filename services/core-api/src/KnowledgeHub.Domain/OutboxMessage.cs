@@ -7,6 +7,8 @@ public static class OutboxEventTypes
 {
     public const string ResourceCreated = "resource.created";
     public const string ResourceUpdated = "resource.updated";
+    /// <summary>A deleted resource was removed for good, so the AI service can forget its text too.</summary>
+    public const string ResourcePurged = "resource.purged";
     public const string ResourceContentChanged = "resource.content_changed";
     public const string ResourceDeleted = "resource.deleted";
     public const string ResourceRestored = "resource.restored";

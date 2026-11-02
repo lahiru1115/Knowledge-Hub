@@ -43,8 +43,7 @@ public sealed partial class MaintenanceService(
         var deadCutoff = now.AddDays(-o.OutboxDeadDays);
         var auditCutoff = now.AddDays(-o.AuditDays);
 
-        var resources = await db.Resources.IgnoreQueryFilters()
-            .Where(r => r.DeletedAt != null && r.DeletedAt < resourceCutoff).ExecuteDeleteAsync(ct);
+        var resources = await PurgeDeletedResourcesAsync(now, resourceCutoff, ct);
         var refresh = await db.RefreshTokens
             .Where(t => t.ExpiresAt < tokenCutoff || (t.RevokedAt != null && t.RevokedAt < tokenCutoff)).ExecuteDeleteAsync(ct);
         var reset = await db.PasswordResetTokens.Where(t => t.CreatedAt < resetCutoff).ExecuteDeleteAsync(ct);
@@ -57,6 +56,36 @@ public sealed partial class MaintenanceService(
         var report = new MaintenanceReport(resources, refresh, reset, done, dead, audit);
         if (report.Total > 0) LogRemoved(report.Resources, report.RefreshTokens, report.PasswordResetTokens, report.OutboxDone + report.OutboxDead, report.AuditEvents);
         return report;
+    }
+
+    /// <summary>
+    /// Removes resources deleted before the cutoff, in batches. Each batch also queues <c>resource.purged</c> in the
+    /// same transaction, so the AI service forgets the page text that it kept for a possible restore.
+    /// </summary>
+    private async Task<int> PurgeDeletedResourcesAsync(DateTimeOffset now, DateTimeOffset cutoff, CancellationToken ct)
+    {
+        var total = 0;
+        while (true)
+        {
+            var batch = await db.Resources.IgnoreQueryFilters()
+                .Where(r => r.DeletedAt != null && r.DeletedAt < cutoff)
+                .OrderBy(r => r.Id).Select(r => new { r.Id, r.UserId }).Take(500).ToListAsync(ct);
+            if (batch.Count == 0) return total;
+
+            await using var tx = await db.Database.BeginTransactionAsync(ct);
+            foreach (var r in batch)
+                db.Outbox.Add(new OutboxMessage
+                {
+                    Type = OutboxEventTypes.ResourcePurged,
+                    Payload = System.Text.Json.JsonSerializer.Serialize(new Dictionary<string, Guid> { ["resource_id"] = r.Id, ["user_id"] = r.UserId }),
+                    NextAttemptAt = now,
+                    CreatedAt = now,
+                });
+            await db.SaveChangesAsync(ct);
+            var ids = batch.Select(r => r.Id).ToList();
+            total += await db.Resources.IgnoreQueryFilters().Where(r => ids.Contains(r.Id)).ExecuteDeleteAsync(ct);
+            await tx.CommitAsync(ct);
+        }
     }
 
     [LoggerMessage(Level = LogLevel.Information,

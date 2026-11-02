@@ -33,7 +33,7 @@ def app_engine():
 async def test_ready_reports_the_schema_version(client):
     r = await client.get("/health/ready")
     assert r.status_code == 200
-    assert r.json() == {"status": "ok", "schema_version": "0001"}
+    assert r.json() == {"status": "ok", "schema_version": "0002"}
 
 
 async def test_ready_is_unavailable_when_the_database_cannot_be_reached(app, bearer):
