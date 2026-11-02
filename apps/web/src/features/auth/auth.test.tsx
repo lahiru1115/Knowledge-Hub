@@ -3,11 +3,20 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '@/test/server'
-import { API, problem, renderApp, setCsrfCookie, signedOut, user } from '@/test/helpers'
+import {
+  API,
+  libraryDefaults,
+  problem,
+  renderApp,
+  setCsrfCookie,
+  signedOut,
+  user,
+} from '@/test/helpers'
 
 /** A browser with a valid session: /me answers, logout works. */
 function signedIn() {
   setCsrfCookie()
+  libraryDefaults()
   server.use(
     http.get(`${API}/me`, () => HttpResponse.json(user)),
     http.post(`${API}/auth/logout`, () => new HttpResponse(null, { status: 204 })),
@@ -296,7 +305,8 @@ describe('sign out', () => {
 
     server.use(http.get(`${API}/me`, () => problem(401, 'unauthenticated')))
     server.use(http.post(`${API}/auth/refresh`, () => problem(401, 'unauthenticated')))
-    await u.click(screen.getByRole('button', { name: 'Sign out' }))
+    await u.click(screen.getByRole('button', { name: 'Account menu for Ada Lovelace' }))
+    await u.click(await screen.findByRole('menuitem', { name: 'Sign out' }))
 
     expect(await screen.findByRole('heading', { name: 'Sign in' })).toBeInTheDocument()
     expect(router.state.location.pathname).toBe('/login')

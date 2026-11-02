@@ -80,7 +80,10 @@ test('profile name and theme are saved on the account and follow the user to ano
 }) => {
   const email = await register(page)
 
-  await page.getByRole('link', { name: 'Settings' }).click()
+  await page
+    .getByRole('navigation', { name: 'Main' })
+    .getByRole('link', { name: 'Settings' })
+    .click()
   await page.getByLabel('Your name').fill('Grace Hopper')
   await page.getByRole('button', { name: 'Save changes' }).click()
   await expect(page.getByText('Saved')).toBeVisible()
@@ -90,7 +93,7 @@ test('profile name and theme are saved on the account and follow the user to ano
 
   await page.reload()
   await expect(page.locator('html')).toHaveClass(/dark/)
-  await expect(page.getByText('Grace Hopper')).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Account menu for Grace Hopper' })).toBeVisible()
 
   // A fresh browser has never seen this account's theme.
   const other = await browser.newContext()

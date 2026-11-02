@@ -46,7 +46,12 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 
 ## Stage 3 — Library (the core product)
 
-**Status:** backend done (3.1 to 3.5 and 3.7): collections, resources, tags, keyword search, duplicate check, bulk actions, cross-user isolation tests. Saved views (Could, in 3.5) and the web screens (3.6) are next. Resources stay `metadata_status = pending` until Stage 4 adds the metadata worker, and the "fields the user edited are not overwritten" rule (FR-RES-03) needs a per-field marker added with it.
+**Status:** 3.1 to 3.7 done except saved views (Could). The web screens are built: responsive app shell (top bar, sidebar, phone tab bar and Add button), library list with URL-based search, filters, sort and paging, bulk actions, quick-add with duplicate detection, the resource drawer (inline edit, tags, Markdown notes with autosave and conflict handling, summary), collections (list, collection page, create/edit/delete with the move-or-delete choice, Move up/down), the tags manager, toasts with Undo, and single-key shortcuts that can be turned off.
+
+Not built yet, deliberately (each depends on a later stage or is a Could):
+- **Needs Stage 4 (metadata):** the quick-add preview card, the shimmer on rows with pending metadata and the 2-second refetch, and "Retry" on failed rows. Resources stay `pending` until then.
+- **Needs Stage 5 (AI):** keyword/semantic switch, tag suggestions in quick-add, Summarise and Related in the drawer.
+- **Later polish (Should/Could):** grid view, drag and drop onto the sidebar (Move to… and Move up/down are the keyboard alternatives), the ⌘K command palette, search results as you type in the top bar, clipboard paste chip, the drawer beside the list at 1440 px and wider (it overlays today), clipboard-free share target (PWA).
 
 | # | Work | Requirements |
 |---|---|---|

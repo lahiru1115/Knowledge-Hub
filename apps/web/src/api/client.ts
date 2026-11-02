@@ -10,6 +10,8 @@ export class ApiProblem extends Error {
   readonly traceId?: string
   readonly retryAfter?: number
   readonly resetAt?: string
+  /** On a tag rename that clashes: the existing tag to offer a merge into. */
+  readonly suggestMergeTagId?: string
 
   constructor(init: {
     status: number
@@ -18,6 +20,7 @@ export class ApiProblem extends Error {
     traceId?: string
     retryAfter?: number
     resetAt?: string
+    suggestMergeTagId?: string
   }) {
     super(messageFor(init.code, init))
     this.name = 'ApiProblem'
@@ -27,6 +30,7 @@ export class ApiProblem extends Error {
     this.traceId = init.traceId
     this.retryAfter = init.retryAfter
     this.resetAt = init.resetAt
+    this.suggestMergeTagId = init.suggestMergeTagId
   }
 }
 
@@ -36,6 +40,7 @@ interface ProblemBody {
   trace_id?: string
   retry_after?: number
   reset_at?: string
+  suggest_merge_tag_id?: string
 }
 
 function toProblem(status: number, body: unknown): ApiProblem {
@@ -47,6 +52,7 @@ function toProblem(status: number, body: unknown): ApiProblem {
     traceId: p.trace_id,
     retryAfter: p.retry_after,
     resetAt: p.reset_at,
+    suggestMergeTagId: p.suggest_merge_tag_id,
   })
 }
 

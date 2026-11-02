@@ -3,11 +3,12 @@ import userEvent from '@testing-library/user-event'
 import { HttpResponse, http } from 'msw'
 import { describe, expect, it } from 'vitest'
 import { server } from '@/test/server'
-import { API, problem, renderApp, setCsrfCookie, user } from '@/test/helpers'
+import { API, libraryDefaults, problem, renderApp, setCsrfCookie, user } from '@/test/helpers'
 
 /** A signed-in browser whose /me reflects PATCH /me, like the real API. */
 function signedIn(initial: Record<string, unknown> = {}) {
   setCsrfCookie()
+  libraryDefaults()
   let me: Record<string, unknown> = { ...user, ...initial }
   const patches: unknown[] = []
   server.use(
@@ -77,7 +78,10 @@ describe('profile', () => {
 
     expect(await screen.findByText('Saved')).toBeInTheDocument()
     expect(patches).toEqual([{ display_name: 'Grace Hopper' }])
-    expect(await screen.findByText('Grace Hopper', { selector: 'span' })).toBeInTheDocument() // the header updated too
+    // The account menu in the top bar shows the new name too.
+    expect(
+      await screen.findByRole('button', { name: 'Account menu for Grace Hopper' }),
+    ).toBeInTheDocument()
   })
 
   it('validates the name in the browser', async () => {

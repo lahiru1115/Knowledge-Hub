@@ -27,7 +27,9 @@ test('register, stay signed in across a reload, sign out', async ({ page }) => {
   await page.reload()
   await expect(page.getByRole('heading', { name: 'Welcome, Ada Lovelace' })).toBeVisible()
 
-  await page.getByRole('button', { name: 'Sign out' }).click()
+  // Sign out lives in the account menu.
+  await page.getByRole('button', { name: /^Account menu for/ }).click()
+  await page.getByRole('menuitem', { name: 'Sign out' }).click()
   await expect(page.getByRole('heading', { name: 'Sign in' })).toBeVisible()
   await expect(page).toHaveURL(/\/login$/)
 

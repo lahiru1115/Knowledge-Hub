@@ -15,7 +15,11 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppLibraryRouteImport } from './routes/_app/library'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
+import { Route as AppTagsRouteImport } from './routes/_app/tags'
+import { Route as AppCollectionsIndexRouteImport } from './routes/_app/collections.index'
+import { Route as AppCollectionsIdRouteImport } from './routes/_app/collections.$id'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAppearanceRouteImport } from './routes/_app/settings/appearance'
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
@@ -51,9 +55,29 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppLibraryRoute = AppLibraryRouteImport.update({
+  id: '/library',
+  path: '/library',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppSettingsRoute = AppSettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppTagsRoute = AppTagsRouteImport.update({
+  id: '/tags',
+  path: '/tags',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCollectionsIndexRoute = AppCollectionsIndexRouteImport.update({
+  id: '/collections/',
+  path: '/collections/',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppCollectionsIdRoute = AppCollectionsIdRouteImport.update({
+  id: '/collections/$id',
+  path: '/collections/$id',
   getParentRoute: () => AppRoute,
 } as any)
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
@@ -89,9 +113,13 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/library': typeof AppLibraryRoute
   '/settings': typeof AppSettingsRouteWithChildren
+  '/tags': typeof AppTagsRoute
+  '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/collections/': typeof AppCollectionsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/account/delete': typeof AppSettingsAccountDeleteRoute
   '/settings/account/': typeof AppSettingsAccountIndexRoute
@@ -101,9 +129,13 @@ export interface FileRoutesByTo {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/library': typeof AppLibraryRoute
+  '/tags': typeof AppTagsRoute
   '/': typeof AppIndexRoute
+  '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/collections': typeof AppCollectionsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/account/delete': typeof AppSettingsAccountDeleteRoute
   '/settings/account': typeof AppSettingsAccountIndexRoute
@@ -115,10 +147,14 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/library': typeof AppLibraryRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
+  '/_app/tags': typeof AppTagsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/collections/$id': typeof AppCollectionsIdRoute
   '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
   '/_app/settings/profile': typeof AppSettingsProfileRoute
+  '/_app/collections/': typeof AppCollectionsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/account/delete': typeof AppSettingsAccountDeleteRoute
   '/_app/settings/account/': typeof AppSettingsAccountIndexRoute
@@ -131,9 +167,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/library'
     | '/settings'
+    | '/tags'
+    | '/collections/$id'
     | '/settings/appearance'
     | '/settings/profile'
+    | '/collections/'
     | '/settings/'
     | '/settings/account/delete'
     | '/settings/account/'
@@ -143,9 +183,13 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/library'
+    | '/tags'
     | '/'
+    | '/collections/$id'
     | '/settings/appearance'
     | '/settings/profile'
+    | '/collections'
     | '/settings'
     | '/settings/account/delete'
     | '/settings/account'
@@ -156,10 +200,14 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_app/library'
     | '/_app/settings'
+    | '/_app/tags'
     | '/_app/'
+    | '/_app/collections/$id'
     | '/_app/settings/appearance'
     | '/_app/settings/profile'
+    | '/_app/collections/'
     | '/_app/settings/'
     | '/_app/settings/account/delete'
     | '/_app/settings/account/'
@@ -217,11 +265,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/library': {
+      id: '/_app/library'
+      path: '/library'
+      fullPath: '/library'
+      preLoaderRoute: typeof AppLibraryRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/settings': {
       id: '/_app/settings'
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof AppSettingsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/tags': {
+      id: '/_app/tags'
+      path: '/tags'
+      fullPath: '/tags'
+      preLoaderRoute: typeof AppTagsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/collections/': {
+      id: '/_app/collections/'
+      path: '/collections'
+      fullPath: '/collections/'
+      preLoaderRoute: typeof AppCollectionsIndexRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/collections/$id': {
+      id: '/_app/collections/$id'
+      path: '/collections/$id'
+      fullPath: '/collections/$id'
+      preLoaderRoute: typeof AppCollectionsIdRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/settings/': {
@@ -283,13 +359,21 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppLibraryRoute: typeof AppLibraryRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
+  AppTagsRoute: typeof AppTagsRoute
   AppIndexRoute: typeof AppIndexRoute
+  AppCollectionsIdRoute: typeof AppCollectionsIdRoute
+  AppCollectionsIndexRoute: typeof AppCollectionsIndexRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppLibraryRoute: AppLibraryRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
+  AppTagsRoute: AppTagsRoute,
   AppIndexRoute: AppIndexRoute,
+  AppCollectionsIdRoute: AppCollectionsIdRoute,
+  AppCollectionsIndexRoute: AppCollectionsIndexRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

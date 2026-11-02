@@ -22,6 +22,15 @@ export const user = {
   created_at: '2026-11-02T08:00:00Z',
 } as const
 
+/** A browser with a valid session. */
+export function signedInSession() {
+  setCsrfCookie()
+  server.use(
+    http.get(`${API}/me`, () => HttpResponse.json(user)),
+    http.post(`${API}/auth/logout`, () => new HttpResponse(null, { status: 204 })),
+  )
+}
+
 export function problem(status: number, code: string, extra: Record<string, unknown> = {}) {
   return HttpResponse.json(
     { type: `/problems/${code}`, title: code, status, code, trace_id: 'abc123', ...extra },
@@ -32,6 +41,30 @@ export function problem(status: number, code: string, extra: Record<string, unkn
 /** Simulates the Set-Cookie the real API sends: the jar is `document.cookie` in jsdom. */
 export function setCsrfCookie(value = 'csrf-1') {
   document.cookie = `kh_csrf=${value}; path=/`
+}
+
+export interface Seed {
+  collections?: unknown[]
+  tags?: unknown[]
+  resources?: unknown[]
+}
+
+/** The data the app shell loads in the background (collections, tags), so tests need not repeat it. */
+export function libraryDefaults(seed: Seed = {}) {
+  server.use(
+    http.get(`${API}/collections`, () =>
+      HttpResponse.json({ items: seed.collections ?? [], inbox_count: 0 }),
+    ),
+    http.get(`${API}/tags`, () => HttpResponse.json({ items: seed.tags ?? [] })),
+    http.get(`${API}/resources`, () =>
+      HttpResponse.json({
+        items: seed.resources ?? [],
+        page: 1,
+        page_size: 20,
+        total: seed.resources?.length ?? 0,
+      }),
+    ),
+  )
 }
 
 /** Handlers for a browser that has no session: /me is 401, refresh fails, csrf works. */

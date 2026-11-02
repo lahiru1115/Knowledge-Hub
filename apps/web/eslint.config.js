@@ -33,5 +33,10 @@ export default tseslint.config(
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
   },
+  {
+    // In tests, a missing element should fail loudly, so `!` is the clearest way to say "this must exist".
+    files: ['**/*.test.{ts,tsx}', 'src/test/**'],
+    rules: { '@typescript-eslint/no-non-null-assertion': 'off' },
+  },
   { files: ['*.config.{js,ts}'], languageOptions: { globals: { ...globals.node } } },
 )

@@ -126,3 +126,9 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+/* Focused items must not hide behind the sticky top bar or the phone tab bar (WCAG 2.4.11). */
+html {
+  scroll-padding-top: 4.5rem;
+  scroll-padding-bottom: 5rem;
+}
