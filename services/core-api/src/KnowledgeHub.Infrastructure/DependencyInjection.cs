@@ -1,5 +1,7 @@
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
+using KnowledgeHub.Application.Library;
+using KnowledgeHub.Infrastructure.Library;
 using KnowledgeHub.Infrastructure.Email;
 using KnowledgeHub.Infrastructure.Persistence;
 using KnowledgeHub.Infrastructure.Security;
@@ -18,6 +20,9 @@ public static class DependencyInjection
 
         services.AddDbContext<AppDbContext>(o => ConfigureDb(o, connectionString));
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
+        services.AddScoped<IResourceSearch, ResourceSearch>();
+        services.AddScoped<ITagsTextSync, TagsTextSync>();
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();

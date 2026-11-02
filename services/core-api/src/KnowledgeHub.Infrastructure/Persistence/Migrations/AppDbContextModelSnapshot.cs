@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using NpgsqlTypes;
 
 #nullable disable
 
@@ -70,6 +71,64 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_audit_events_user_id_created_at");
 
                     b.ToTable("audit_events", "core");
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.Collection", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Color")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("color");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("Icon")
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)")
+                        .HasColumnName("icon");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_pinned");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("name");
+
+                    b.Property<int>("Position")
+                        .HasColumnType("integer")
+                        .HasColumnName("position");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_collections");
+
+                    b.HasIndex("UserId", "IsPinned", "Position")
+                        .IsDescending(false, true, false)
+                        .HasDatabaseName("ix_collections_user_id_is_pinned_position");
+
+                    b.ToTable("collections", "core");
                 });
 
             modelBuilder.Entity("KnowledgeHub.Domain.PasswordResetToken", b =>
@@ -167,6 +226,216 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                     b.ToTable("refresh_tokens", "core");
                 });
 
+            modelBuilder.Entity("KnowledgeHub.Domain.Resource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("CollectionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("collection_id");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<DateTimeOffset?>("DeletedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("deleted_at");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("description");
+
+                    b.Property<string>("FaviconUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("favicon_url");
+
+                    b.Property<string>("ImageUrl")
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("image_url");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_archived");
+
+                    b.Property<bool>("IsFavourite")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_favourite");
+
+                    b.Property<string>("MetadataStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("metadata_status");
+
+                    b.Property<string>("Notes")
+                        .HasColumnType("text")
+                        .HasColumnName("notes");
+
+                    b.Property<NpgsqlTsVector>("SearchVector")
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("tsvector")
+                        .HasColumnName("search_vector")
+                        .HasComputedColumnSql("setweight(to_tsvector('english', coalesce(title, '')), 'A') ||\nsetweight(to_tsvector('english', coalesce(tags_text, '')), 'B') ||\nsetweight(to_tsvector('english', coalesce(description, '')), 'C') ||\nsetweight(to_tsvector('english', coalesce(notes, '') || ' ' || regexp_replace(url, '[^[:alnum:]]+', ' ', 'g')), 'D')", true);
+
+                    b.Property<string>("SiteName")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("site_name");
+
+                    b.Property<string>("Summary")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("SummarySource")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("summary_source");
+
+                    b.Property<string>("TagsText")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("text")
+                        .HasDefaultValue("")
+                        .HasColumnName("tags_text");
+
+                    b.Property<string>("Title")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("title");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("type");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("updated_at");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("url");
+
+                    b.Property<string>("UrlNormalized")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("url_normalized");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_resources");
+
+                    b.HasIndex("CollectionId")
+                        .HasDatabaseName("ix_resources_collection_id");
+
+                    b.HasIndex("DeletedAt")
+                        .HasDatabaseName("ix_resources_deleted_at")
+                        .HasFilter("deleted_at IS NOT NULL");
+
+                    b.HasIndex("SearchVector")
+                        .HasDatabaseName("ix_resources_search_vector");
+
+                    NpgsqlIndexBuilderExtensions.HasMethod(b.HasIndex("SearchVector"), "gin");
+
+                    b.HasIndex("UserId", "CollectionId")
+                        .HasDatabaseName("ix_resources_user_id_collection_id")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.HasIndex("UserId", "UpdatedAt")
+                        .IsDescending(false, true)
+                        .HasDatabaseName("ix_resources_user_id_updated_at")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.HasIndex("UserId", "UrlNormalized")
+                        .HasDatabaseName("ix_resources_user_id_url_normalized")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.HasIndex("UserId", "CreatedAt", "Id")
+                        .IsDescending(false, true, false)
+                        .HasDatabaseName("ix_resources_user_id_created_at_id")
+                        .HasFilter("deleted_at IS NULL");
+
+                    b.ToTable("resources", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_resources_metadata_status", "metadata_status IN ('pending','ready','failed')");
+
+                            t.HasCheckConstraint("ck_resources_summary_source", "summary_source IN ('none','extracted','ai','user')");
+
+                            t.HasCheckConstraint("ck_resources_type", "type IN ('article','video','pdf','course','repo','website','other')");
+                        });
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.ResourceTag", b =>
+                {
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("resource_id");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tag_id");
+
+                    b.Property<string>("Source")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("source");
+
+                    b.HasKey("ResourceId", "TagId")
+                        .HasName("pk_resource_tags");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("ix_resource_tags_tag_id");
+
+                    b.ToTable("resource_tags", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_resource_tags_source", "source IN ('user','ai')");
+                        });
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.Tag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tags");
+
+                    b.HasIndex("UserId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tags_user_id_name");
+
+                    b.ToTable("tags", "core");
+                });
+
             modelBuilder.Entity("KnowledgeHub.Domain.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -245,6 +514,16 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("KnowledgeHub.Domain.Collection", b =>
+                {
+                    b.HasOne("KnowledgeHub.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_collections_users_user_id");
+                });
+
             modelBuilder.Entity("KnowledgeHub.Domain.PasswordResetToken", b =>
                 {
                     b.HasOne("KnowledgeHub.Domain.User", null)
@@ -263,6 +542,58 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_refresh_tokens_users_user_id");
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.Resource", b =>
+                {
+                    b.HasOne("KnowledgeHub.Domain.Collection", null)
+                        .WithMany()
+                        .HasForeignKey("CollectionId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_resources_collections_collection_id");
+
+                    b.HasOne("KnowledgeHub.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_resources_users_user_id");
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.ResourceTag", b =>
+                {
+                    b.HasOne("KnowledgeHub.Domain.Resource", "Resource")
+                        .WithMany("ResourceTags")
+                        .HasForeignKey("ResourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_resource_tags_resources_resource_id");
+
+                    b.HasOne("KnowledgeHub.Domain.Tag", "Tag")
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_resource_tags_tags_tag_id");
+
+                    b.Navigation("Resource");
+
+                    b.Navigation("Tag");
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.Tag", b =>
+                {
+                    b.HasOne("KnowledgeHub.Domain.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_tags_users_user_id");
+                });
+
+            modelBuilder.Entity("KnowledgeHub.Domain.Resource", b =>
+                {
+                    b.Navigation("ResourceTags");
                 });
 #pragma warning restore 612, 618
         }

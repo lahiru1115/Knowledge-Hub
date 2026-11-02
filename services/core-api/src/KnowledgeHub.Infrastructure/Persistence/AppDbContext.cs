@@ -15,6 +15,10 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+    public DbSet<Collection> Collections => Set<Collection>();
+    public DbSet<Resource> Resources => Set<Resource>();
+    public DbSet<Tag> Tags => Set<Tag>();
+    public DbSet<ResourceTag> ResourceTags => Set<ResourceTag>();
 
     private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web)
     {
@@ -78,5 +82,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => x.CreatedAt);
             // No foreign key: the account.deleted row outlives the user (Doc 02 §7.2).
         });
+
+        LibraryModel.Configure(modelBuilder);
     }
 }

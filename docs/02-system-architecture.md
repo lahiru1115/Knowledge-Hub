@@ -647,9 +647,11 @@ search_vector tsvector GENERATED ALWAYS AS (
     setweight(to_tsvector('english', coalesce(title, '')), 'A') ||
     setweight(to_tsvector('english', coalesce(tags_text, '')), 'B') ||
     setweight(to_tsvector('english', coalesce(description, '')), 'C') ||
-    setweight(to_tsvector('english', coalesce(notes, '') || ' ' || url), 'D')
+    setweight(to_tsvector('english', coalesce(notes, '') || ' ' || regexp_replace(url, '[^[:alnum:]]+', ' ', 'g')), 'D')
 ) STORED
 ```
+
+The URL is split into words first because PostgreSQL's parser keeps a whole URL as one token, which a search for `pgbouncer` would not match against `https://pgbouncer.org/docs`.
 
 `tags_text` is updated by the application whenever a resource's tags change and by a set-based
 `UPDATE` when a tag is renamed, merged or deleted. Queries build a `tsquery` from the user's words

@@ -816,6 +816,8 @@ export interface components {
              * @description ai_quota_exceeded
              */
             reset_at?: string;
+            /** @description tag_name_taken on a rename: the existing tag the client can offer to merge into (FR-TAG-03) */
+            suggest_merge_tag_id?: components["schemas"]["Id"];
         };
         Preferences: {
             /** @enum {string} */

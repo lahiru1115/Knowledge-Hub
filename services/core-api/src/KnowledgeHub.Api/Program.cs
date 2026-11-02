@@ -2,8 +2,10 @@ using System.Text.Json;
 using FluentValidation;
 using KnowledgeHub.Api.Http;
 using KnowledgeHub.Api.Identity;
+using KnowledgeHub.Api.Library;
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
+using KnowledgeHub.Application.Library;
 using KnowledgeHub.Infrastructure;
 using KnowledgeHub.Infrastructure.Security;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -26,7 +28,8 @@ builder.Services.AddOptions<AuthOptions>()
 builder.Services.Configure<JsonOptions>(o =>
 {
     o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower;
-    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower));
+    // Enums travel as lowercase names only: a number such as 2 must not silently mean the third value.
+    o.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter(JsonNamingPolicy.SnakeCaseLower, allowIntegerValues: false));
 });
 builder.Services.Configure<RouteHandlerOptions>(o => o.ThrowOnBadRequest = true);
 
@@ -40,6 +43,9 @@ builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>()
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AccountService>();
 builder.Services.AddScoped<SessionIssuer>();
+builder.Services.AddScoped<CollectionService>();
+builder.Services.AddScoped<ResourceService>();
+builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<AuditLog>();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
@@ -105,6 +111,7 @@ app.MapGet("/health/ready", async (IAppDbContext db, HttpContext http, Cancellat
 
 var api = app.MapGroup("/api/v1");
 api.MapIdentity();
+api.MapLibrary();
 
 app.Run();
 

@@ -1290,6 +1290,7 @@ components:
             items: { type: string }
         retry_after: { type: integer, description: Seconds (account_locked) }
         reset_at: { type: string, format: date-time, description: ai_quota_exceeded }
+        suggest_merge_tag_id: { $ref: '#/components/schemas/Id', description: 'tag_name_taken on a rename: the existing tag the client can offer to merge into (FR-TAG-03)' }
 
     Preferences:
       type: object

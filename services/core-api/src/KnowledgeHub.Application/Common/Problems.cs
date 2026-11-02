@@ -83,4 +83,11 @@ public sealed class AppException(ProblemCode code, string? detail = null) : Exce
     public string? Detail { get; } = detail;
     public IDictionary<string, string[]>? Errors { get; init; }
     public IDictionary<string, object?> Extensions { get; } = new Dictionary<string, object?>();
+
+    /// <summary>A <c>400 validation_failed</c> about one field.</summary>
+    public static AppException Field(string field, string message) =>
+        new(ProblemCode.ValidationFailed, "One or more fields are not valid.")
+        {
+            Errors = new Dictionary<string, string[]> { [field] = [message] },
+        };
 }

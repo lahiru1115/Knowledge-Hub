@@ -25,6 +25,10 @@ public interface IAppDbContext
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<AuditEvent> AuditEvents { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
+    DbSet<Collection> Collections { get; }
+    DbSet<Resource> Resources { get; }
+    DbSet<Tag> Tags { get; }
+    DbSet<ResourceTag> ResourceTags { get; }
     Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
     Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

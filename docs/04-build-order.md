@@ -46,6 +46,8 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 
 ## Stage 3 — Library (the core product)
 
+**Status:** backend done (3.1 to 3.5 and 3.7): collections, resources, tags, keyword search, duplicate check, bulk actions, cross-user isolation tests. Saved views (Could, in 3.5) and the web screens (3.6) are next. Resources stay `metadata_status = pending` until Stage 4 adds the metadata worker, and the "fields the user edited are not overwritten" rule (FR-RES-03) needs a per-field marker added with it.
+
 | # | Work | Requirements |
 |---|---|---|
 | 3.1 | `collections` with counts, Inbox, delete-with-choice; pin and reorder (S) | FR-COL-* |
