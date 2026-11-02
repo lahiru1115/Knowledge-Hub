@@ -1,0 +1,26 @@
+name: contract
+on:
+  pull_request:
+    paths: ["contracts/**", ".github/workflows/contract.yml"]
+  push:
+    branches: [main]
+    paths: ["contracts/**", ".github/workflows/contract.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: contract-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install validator
+        run: pip install openapi-spec-validator==0.7.1 pyyaml==6.0.2
+      - name: Validate OpenAPI 3.1 and operationId uniqueness
+        run: python .github/scripts/validate_contract.py contracts/openapi.yaml
+  # Stage 7: add a job that composes the stack, runs Schemathesis with
+  # contracts/schemathesis.toml, and compares the API's generated document with oasdiff.

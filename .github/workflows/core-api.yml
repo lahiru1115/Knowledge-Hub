@@ -1,0 +1,37 @@
+name: core-api
+on:
+  pull_request:
+    paths: ["services/core-api/**", "contracts/**", ".github/workflows/core-api.yml"]
+  push:
+    branches: [main]
+    paths: ["services/core-api/**", "contracts/**", ".github/workflows/core-api.yml"]
+permissions:
+  contents: read
+concurrency:
+  group: core-api-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    working-directory: services/core-api
+jobs:
+  build-test:
+    runs-on: ubuntu-latest   # Docker is preinstalled, which Testcontainers needs
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: services/core-api/global.json
+      - uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ hashFiles('services/core-api/**/*.csproj', 'services/core-api/Directory.Packages.props') }}
+          restore-keys: nuget-
+      - run: dotnet restore
+      - name: Build (warnings are errors)
+        run: dotnet build --no-restore -c Release
+      - name: Unit tests
+        run: dotnet test --no-build -c Release tests/KnowledgeHub.UnitTests
+      - name: Integration tests
+        run: dotnet test --no-build -c Release tests/KnowledgeHub.IntegrationTests
+  # Later: coverage gate on Domain and Application (NFR-MAIN-03) and an oasdiff check of the
+  # generated OpenAPI document against contracts/openapi.yaml (Doc 02 §8.1).
