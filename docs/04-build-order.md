@@ -102,10 +102,11 @@ Not done: tag rename, merge and delete do not emit events, so the AI service lea
 
 **Demo:** semantic search finds a synonym; chat answers with citations.
 
-**Status:** 5.1 done; 5.2 done on the AI service side only.
+**Status:** 5.1 and 5.3 done; 5.2 done on the AI service side only.
 - **5.1:** FastAPI app (`create_app` factory), `/health/live` and `/health/ready` (ready checks the `ai` schema version), Problem Details errors in the Core API's shape, Alembic migration `0001` for `chunks` (one column for any vector size, partial HNSW index per model, generated `tsv`), `summaries`, `chat_sessions`, `chat_messages`, `usage`, a Dockerfile whose job is to serve only (migrations run as a separate one-shot `alembic upgrade head` as `ai_migrator`), and the `ai-service.yml` workflow (ruff, mypy, pgvector database, migrate, tests, migrate down and up, image build). Tests also check the `ai_app` role can use `ai` but not change it or read `core`.
 - **5.2 (AI side):** service JWT check — HS256 only, issuer, audience, expiry, required claims, lifetime at most 120 s; the user comes only from `sub`; `system` tokens need a scope and cannot act as a user. The Core API's `IAiClient` (signing, resilience pipeline, `ai_unavailable` mapping) is not written yet.
-- Not verified here: the Docker image build and the workflow itself (no Docker in this environment); the rest runs against a local PostgreSQL 16 with pgvector.
+- **5.3:** provider protocols (`app/providers/base.py`) and the free profile. `ExtractiveSummarizer`: the description if it is at least 80 characters, otherwise the opening paragraphs, cut at a sentence to at most 600 characters, with `not_enough_content` when there is too little text. `YakeTagger`: up to 5 keyphrases, shaped to the Core API's tag rules; the user's existing tags come first when the word appears in the page or an embedding is at least 0.75 similar. `FastEmbedEmbedder`: `BAAI/bge-small-en-v1.5` (384 dimensions), loaded on first use. `build_providers` picks them from `AI_PROFILE`; the Claude profile raises until 5.9. Model IDs come from `EMBEDDING_MODEL` and `MODEL_CACHE_DIR`.
+- Not verified here: the real embedding model has never run, because Hugging Face is unreachable from this environment; the embedder is tested against a stand-in for `fastembed`, and similarity logic with a fake embedder. Whether bge-small really scores existing tags at 0.75 or more is untested, so the threshold may need tuning (the evaluation set in 5.8 is the place). The Docker image build and the workflow itself (no Docker in this environment); the rest runs against a local PostgreSQL 16 with pgvector.
 
 ## Stage 6 — Insights, export, admin
 

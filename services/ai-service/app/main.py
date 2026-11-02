@@ -7,6 +7,7 @@ from app import errors
 from app.api import health
 from app.config import Settings, get_settings
 from app.db import make_engine
+from app.providers import build_providers
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
@@ -15,6 +16,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.engine = make_engine(settings)
+        app.state.providers = build_providers(settings)
         try:
             yield
         finally:

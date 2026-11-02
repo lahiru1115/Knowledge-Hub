@@ -11,6 +11,8 @@ dependencies = [
   "alembic>=1.14",
   "pyjwt>=2.10",
   "pydantic-settings>=2.6",
+  "yake>=0.7.3",
+  "fastembed>=0.9.1",
 ]
 
 [dependency-groups]
@@ -44,3 +46,7 @@ python_version = "3.12"
 strict = true
 plugins = []
 exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["yake", "fastembed"]
+ignore_missing_imports = true

@@ -16,6 +16,9 @@ class Settings(BaseSettings):
     service_jwt_issuer: str = "core-api"
     service_jwt_audience: str = "ai-service"
     ai_profile: str = Field(default="free", alias="AI_PROFILE")
+    # Model IDs are configuration so newer models need no code change (IR-32).
+    embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", alias="EMBEDDING_MODEL")
+    model_cache_dir: str | None = Field(default=None, alias="MODEL_CACHE_DIR")
 
     @field_validator("service_jwt_secret")
     @classmethod
