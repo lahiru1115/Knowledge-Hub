@@ -391,7 +391,7 @@ check. Unless stated otherwise, every requirement applies only to the signed-in 
 | ID | Requirement |
 |---|---|
 | IR-20 | The AI service shall expose an internal HTTP API for: summarise, suggest tags, index a resource (`PUT /index/{resource_id}`), remove it (`DELETE /index/{resource_id}`), semantic search, related resources, chat (streamed), chat history, usage, and user purge (`DELETE /users/{user_id}`). |
-| IR-21 | Every request shall carry a short-lived signed service token that names the user it acts for (or a shared service key in development). Requests without a valid token return `401`. |
+| IR-21 | Every request shall carry a short-lived signed service token that names the user it acts for (the same mechanism in every environment). Requests without a valid token return `401`. |
 | IR-22 | The AI service shall return only IDs, scores, snippets and generated text; the Core API loads full resources and re-checks ownership before returning them. |
 | IR-23 | The AI service shall not be reachable from the public internet. |
 
@@ -547,6 +547,7 @@ erDiagram
     text role "member or admin"
     boolean is_disabled
     jsonb preferences
+    uuid security_stamp "changes on disable or password change"
     int failed_login_count
     timestamptz locked_until
     timestamptz last_login_at
@@ -603,6 +604,7 @@ erDiagram
     text site_name
     text summary
     text summary_source
+    text tags_text "denormalised tag names for search"
     boolean is_favourite
     boolean is_archived
     text metadata_status
@@ -666,6 +668,7 @@ erDiagram
     uuid id PK
     uuid user_id "logical ref to core.users"
     uuid resource_id "logical ref to core.resources"
+    uuid collection_id "logical ref, nullable"
     int ordinal
     text text
     vector embedding
@@ -730,6 +733,7 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 | is_disabled | boolean | Default false; set by admins (FR-ADM-02) |
 | preferences | jsonb | `{ "theme": "system\|light\|dark", "ai_auto_summary": true, "ai_tag_suggestions": true, "onboarding_dismissed": false }` |
 | failed_login_count, locked_until | int, timestamptz | Lockout state (FR-AUTH-02) |
+| security_stamp | uuid | Replaced when the user is disabled or changes or resets their password; access tokens carrying an old stamp are rejected within 60 seconds |
 
 **core.refresh_tokens / core.password_reset_tokens**
 
@@ -767,7 +771,8 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 | is_favourite, is_archived | boolean | Default false |
 | metadata_status | text | `pending`, `ready`, `failed` |
 | content_hash | text | SHA-256 of the extracted text; used to skip re-indexing unchanged content |
-| search_vector | tsvector | Weighted: title A, tags B, description C, notes and URL D; GIN index |
+| tags_text | text | The resource's tag names joined by spaces; kept in step by the application when tags change, renamed or merged |
+| search_vector | tsvector | Generated column, weighted: title A, tags_text B, description C, notes and URL D; GIN index |
 | deleted_at | timestamptz | Set on delete; the row is purged 7 days later (FR-RES-04) |
 
 **core.tags / core.resource_tags**
@@ -781,7 +786,7 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 
 | Field | Type | Rules |
 |---|---|---|
-| type | text | `resource.created`, `resource.updated`, `resource.deleted`, `resource.restored`, `user.deleted` |
+| type | text | `resource.created`, `resource.updated`, `resource.content_changed`, `resource.deleted`, `resource.restored`, `user.deleted` |
 | payload | jsonb | IDs and the minimum data the job needs |
 | traceparent | text | W3C trace context, so the job joins the original trace (NFR-OBS-02) |
 | status | text | `pending`, `processing`, `done`, `dead` |
@@ -803,6 +808,7 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 | text | text | About 200–400 words with overlap |
 | embedding | vector(n) | Dimension set by the embedding model (for example 384 for a small local model); HNSW index |
 | tsv | tsvector | Keyword index for hybrid retrieval; GIN index |
+| collection_id | uuid | Copy of the resource's collection, so chat can be limited to one collection (FR-AI-06); updated on `resource.updated` |
 | embedding_model | text | Lets the service detect chunks that need re-embedding after a profile change |
 
 **ai.summaries, ai.chat_sessions, ai.chat_messages, ai.usage**
@@ -935,7 +941,8 @@ flowchart LR
 **Main flow**
 
 1. The member chooses the scope (whole library or one collection) and types a question.
-2. The Core API checks the quota and forwards the question to the AI service with the member's ID.
+2. The Core API forwards the question to the AI service with the member's ID; the AI service checks
+   the quota.
 3. The AI service retrieves the most relevant chunks of the member's resources (hybrid retrieval).
 4. The AI service asks the model to answer only from those chunks, and streams the answer.
 5. The web app shows the answer as it streams, with citation chips.
