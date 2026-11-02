@@ -197,6 +197,7 @@ paths:
       tags: [Identity]
       operationId: deleteMe
       summary: Delete account (password in body)
+      description: The current password is required. OAuth-only accounts (Could) will need a fresh sign-in instead, which is not specified yet.
       x-csrf: true
       requestBody:
         required: true
@@ -380,11 +381,12 @@ paths:
           description: A collection ID, or the literal `inbox`
           schema: { type: string }
         - { name: favourite, in: query, schema: { type: boolean } }
-        - { name: archived, in: query, schema: { type: boolean } }
+        - { name: archived, in: query, description: 'Default false hides archived resources (FR-RES-10)', schema: { type: boolean, default: false } }
         - { name: created_from, in: query, schema: { type: string, format: date-time } }
         - { name: created_to, in: query, schema: { type: string, format: date-time } }
         - name: sort
           in: query
+          description: 'Default is `newest`, or `relevance` when `q` is set (FR-SRCH-03)'
           schema: { type: string, enum: [relevance, newest, oldest, title, updated] }
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
@@ -422,16 +424,17 @@ paths:
         - { name: url, in: query, required: true, schema: { type: string, maxLength: 2048 } }
       responses:
         '200':
-          description: Existing resources with the same normalised URL
+          description: The existing resource with the same normalised URL, or null (FR-RES-11)
           content:
             application/json:
               schema:
                 type: object
-                required: [duplicates]
+                required: [existing]
                 properties:
-                  duplicates:
-                    type: array
-                    items: { $ref: '#/components/schemas/Resource' }
+                  existing:
+                    oneOf:
+                      - $ref: '#/components/schemas/Resource'
+                      - type: 'null'
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
   /resources/bulk:
@@ -709,6 +712,11 @@ paths:
       tags: [Insights]
       operationId: getDashboard
       summary: Totals, type breakdown, recent items, weekly activity, onboarding steps
+      parameters:
+        - name: time_zone
+          in: query
+          description: IANA time zone used to bucket weekly activity (FR-DASH-04). Defaults to UTC.
+          schema: { type: string, default: UTC, example: Europe/London }
       responses:
         '200':
           description: Dashboard
@@ -843,7 +851,7 @@ paths:
       operationId: searchSemantic
       summary: Semantic search (page is always 1)
       parameters:
-        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 500 } }
+        - { name: q, in: query, required: true, description: 'Length limit proposed here; not yet in the SRS', schema: { type: string, minLength: 1, maxLength: 500 } }
         - $ref: '#/components/parameters/PageSize'
       responses:
         '200':
@@ -958,7 +966,7 @@ paths:
             schema:
               type: object
               required: [content]
-              properties: { content: { type: string, minLength: 1, maxLength: 4000 } }
+              properties: { content: { type: string, minLength: 1, maxLength: 4000, description: 'Length limit proposed here; not yet in the SRS' } }
       responses:
         '200':
           description: Event stream
@@ -1018,6 +1026,11 @@ paths:
       tags: [Admin]
       operationId: adminAiUsage
       summary: AI usage and cost, per day for the last 30 days
+      parameters:
+        - name: user_id
+          in: query
+          description: Limit to one user. Omit for totals across all users (rows then have no user_id).
+          schema: { $ref: '#/components/schemas/Id' }
       responses:
         '200':
           description: Usage rows
@@ -1057,11 +1070,20 @@ paths:
       tags: [Health]
       operationId: healthReady
       summary: Database reachable (served at /health/ready, outside /api/v1)
-      description: Reports AI service status in the body without failing readiness.
+      description: Database and AI service checks; the body has no internal details (IR-17). AI status is reported but does not fail readiness.
       security: []
       servers: [{ url: / }]
       responses:
-        '200': { description: "Ready" }
+        '200':
+          description: Ready
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status: { type: string, enum: [ready] }
+                  ai: { type: string, enum: [up, down] }
         '503': { $ref: '#/components/responses/Unavailable' }
 
 components:
@@ -1161,6 +1183,10 @@ components:
     AiOperation:
       type: string
       enum: [summarize, suggest_tags, embed, search, chat]
+    AiQuotaOperation:
+      type: string
+      description: Operations with a daily quota (FR-AI-10). Background indexing (`embed`) is not counted.
+      enum: [summarize, suggest_tags, search, chat]
 
     ProblemCode:
       type: string
@@ -1357,6 +1383,11 @@ components:
     BulkRequest:
       type: object
       required: [action, ids]
+      allOf:
+        - if: { properties: { action: { const: move } } }
+          then: { required: [collection_id] }
+        - if: { properties: { action: { enum: [add_tags, remove_tags] } } }
+          then: { required: [tags] }
       properties:
         action: { type: string, enum: [move, add_tags, remove_tags, delete, restore] }
         ids:
@@ -1391,9 +1422,10 @@ components:
       allOf:
         - $ref: '#/components/schemas/SavedViewInput'
         - type: object
-          required: [id]
+          required: [id, position]
           properties:
             id: { $ref: '#/components/schemas/Id' }
+            position: { type: integer }
 
     Dashboard:
       type: object
@@ -1409,8 +1441,16 @@ components:
             favourites: { type: integer }
         by_type:
           type: object
-          description: One count per resource type; counts sum to totals.resources
-          additionalProperties: { type: integer }
+          description: One count per resource type; counts sum to totals.resources (FR-DASH-02)
+          required: [article, video, pdf, course, repo, website, other]
+          properties:
+            article: { type: integer, minimum: 0 }
+            video: { type: integer, minimum: 0 }
+            pdf: { type: integer, minimum: 0 }
+            course: { type: integer, minimum: 0 }
+            repo: { type: integer, minimum: 0 }
+            website: { type: integer, minimum: 0 }
+            other: { type: integer, minimum: 0 }
         recent:
           type: array
           maxItems: 5
@@ -1428,7 +1468,7 @@ components:
           type: object
           required: [dismissed, steps]
           properties:
-            dismissed: { type: boolean }
+            dismissed: { type: boolean, description: 'Mirrors preferences.onboarding_dismissed; change it with PATCH /me' }
             steps:
               type: object
               required: [first_resource, first_collection, tried_search, asked_question]
@@ -1456,9 +1496,9 @@ components:
             type: object
             required: [operation, used, limit]
             properties:
-              operation: { $ref: '#/components/schemas/AiOperation' }
-              used: { type: integer }
-              limit: { type: integer }
+              operation: { $ref: '#/components/schemas/AiQuotaOperation' }
+              used: { type: integer, minimum: 0 }
+              limit: { type: [integer, 'null'], description: Null when the operation has no quota in the active profile }
     SemanticSearchPage:
       type: object
       required: [items, page, page_size, total]
@@ -1525,7 +1565,7 @@ components:
         display_name: { type: string }
         role: { type: string, enum: [member, admin] }
         created_at: { type: string, format: date-time }
-        last_sign_in_at: { type: [string, 'null'], format: date-time }
+        last_login_at: { type: [string, 'null'], format: date-time }
         resource_count: { type: integer }
         is_disabled: { type: boolean }
     AdminUserPage:
