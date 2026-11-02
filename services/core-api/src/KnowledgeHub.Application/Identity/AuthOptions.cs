@@ -34,4 +34,6 @@ public sealed class RateLimitOptions
     public int RegisterPerIpPerHour { get; set; } = 5;
     public int ResetPerIpPerHour { get; set; } = 5;
     public int GeneralPerUserPerMinute { get; set; } = 300;
+    /// <summary>Link previews make the server fetch other sites, so they have their own, lower limit.</summary>
+    public int PreviewPerUserPerMinute { get; set; } = 20;
 }

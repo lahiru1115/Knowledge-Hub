@@ -8,7 +8,7 @@ namespace KnowledgeHub.Application.Library;
 /// Resources (FR-RES-01 to 12, FR-SRCH-01 to 04). A foreign or missing ID is always <c>404 not_found</c>, and every
 /// ID inside a request (collection, tags) is checked for ownership too (DR-02, NFR-SEC-05).
 /// </summary>
-public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSearch search, ITagsTextSync tagsText)
+public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSearch search, ITagsTextSync tagsText, IOutbox outbox)
 {
     public static readonly TimeSpan UndoWindow = TimeSpan.FromDays(7);
     public const int MaxPageSize = 100;
@@ -61,12 +61,25 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         _ = UrlNormalizer.TryNormalize(url, out var normalized);
         var resource = new Resource
         {
-            UserId = userId, Url = url!, UrlNormalized = normalized, Title = title, Description = description, Notes = notes,
-            Type = input.Type ?? ResourceType.Website, CollectionId = input.CollectionId,
-            MetadataStatus = MetadataStatus.Pending, CreatedAt = now, UpdatedAt = now,
+            UserId = userId,
+            Url = url!,
+            UrlNormalized = normalized,
+            Title = title,
+            Description = description,
+            Notes = notes,
+            Type = input.Type ?? ResourceType.Website,
+            CollectionId = input.CollectionId,
+            MetadataStatus = MetadataStatus.Pending,
+            CreatedAt = now,
+            UpdatedAt = now,
             TagsText = TagResolver.TagsText(tagNames),
+            // Whatever the user typed is theirs: extraction fills only the rest (FR-RES-03).
+            UserEditedFields = (title is not null ? EditedFields.Title : 0)
+                | (description is not null ? EditedFields.Description : 0)
+                | (input.Type is not null ? EditedFields.Type : 0),
         };
         db.Resources.Add(resource);
+        outbox.Add(OutboxEventTypes.ResourceCreated, new { resource_id = resource.Id, user_id = userId });
         var tags = await _tags.EnsureAsync(userId, tagNames, ct);
         foreach (var name in tagNames)
             resource.ResourceTags.Add(new ResourceTag { ResourceId = resource.Id, TagId = tags[name].Id, Tag = tags[name], Source = aiNames.Contains(name) ? TagSource.Ai : TagSource.User });
@@ -93,18 +106,21 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         errors.ThrowIfAny();
         if (input.CollectionId is { IsSet: true, Value: { } collectionId }) await EnsureCollectionAsync(userId, collectionId, ct);
 
+        var urlChanged = false;
         if (url is not null && url != r.Url)
         {
             _ = UrlNormalizer.TryNormalize(url, out var normalized);
             r.Url = url;
             r.UrlNormalized = normalized;
             r.MetadataStatus = MetadataStatus.Pending; // a new address means fetching its details again (FR-RES-03)
+            r.MetadataError = null;
+            urlChanged = true;
         }
 
-        if (input.Title.IsSet) r.Title = title;
-        if (input.Description.IsSet) r.Description = description;
+        if (input.Title.IsSet) { r.Title = title; r.UserEditedFields = Flag(r.UserEditedFields, EditedFields.Title, title is not null); }
+        if (input.Description.IsSet) { r.Description = description; r.UserEditedFields = Flag(r.UserEditedFields, EditedFields.Description, description is not null); }
         if (input.Notes.IsSet) r.Notes = notes;
-        if (input.Type is { } type) r.Type = type;
+        if (input.Type is { } type) { r.Type = type; r.UserEditedFields |= EditedFields.Type; }
         if (input.CollectionId.IsSet) r.CollectionId = input.CollectionId.Value;
         if (input.IsFavourite is { } fav) r.IsFavourite = fav;
         if (input.IsArchived is { } archived) r.IsArchived = archived;
@@ -116,6 +132,22 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
 
         if (tagNames is not null) await SetTagsAsync(userId, r, tagNames, aiNames, ct);
         r.UpdatedAt = clock.UtcNow;
+        // Favourite and archive do not change what is indexed; everything else might (Doc 02 §5.3).
+        if (urlChanged || input.Title.IsSet || input.Description.IsSet || input.Notes.IsSet || input.Type is not null
+            || input.CollectionId.IsSet || input.Tags is not null)
+            outbox.Add(OutboxEventTypes.ResourceUpdated, new { resource_id = r.Id, user_id = userId, url_changed = urlChanged });
+        await db.SaveChangesAsync(ct);
+        return ToDto(r);
+    }
+
+    /// <summary>Tries to fetch the page's details again, for a failed or stale resource (FR-META-03).</summary>
+    public async Task<ResourceDto> RefreshMetadataAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        var r = await WithTags(db.Resources.OwnedBy(userId)).FirstOrDefaultAsync(x => x.Id == id, ct)
+            ?? throw new AppException(ProblemCode.NotFound);
+        r.MetadataStatus = MetadataStatus.Pending;
+        r.MetadataError = null;
+        outbox.Add(OutboxEventTypes.ResourceUpdated, new { resource_id = r.Id, user_id = userId, url_changed = false, refetch = true });
         await db.SaveChangesAsync(ct);
         return ToDto(r);
     }
@@ -127,6 +159,7 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         var r = await db.Resources.OwnedBy(userId).FirstOrDefaultAsync(x => x.Id == id, ct)
             ?? throw new AppException(ProblemCode.NotFound);
         r.DeletedAt = clock.UtcNow;
+        outbox.Add(OutboxEventTypes.ResourceDeleted, new { resource_id = r.Id, user_id = userId });
         await db.SaveChangesAsync(ct);
     }
 
@@ -138,6 +171,7 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
             ?? throw new AppException(ProblemCode.NotFound);
         r.DeletedAt = null;
         r.UpdatedAt = now;
+        outbox.Add(OutboxEventTypes.ResourceRestored, new { resource_id = r.Id, user_id = userId });
         await db.SaveChangesAsync(ct);
         return ToDto(r);
     }
@@ -201,7 +235,18 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
                 break;
         }
 
-        foreach (var r in changed) r.UpdatedAt = now;
+        foreach (var r in changed)
+        {
+            r.UpdatedAt = now;
+            var type = input.Action switch
+            {
+                BulkAction.Delete => OutboxEventTypes.ResourceDeleted,
+                BulkAction.Restore => OutboxEventTypes.ResourceRestored,
+                _ => OutboxEventTypes.ResourceUpdated,
+            };
+            outbox.Add(type, new { resource_id = r.Id, user_id = userId, url_changed = false });
+        }
+
         await db.SaveChangesAsync(ct);
         if (input.Action is BulkAction.AddTags or BulkAction.RemoveTags && changed.Count > 0)
             await tagsText.RefreshAsync(userId, [.. changed.Select(r => r.Id)], ct);
@@ -211,13 +256,15 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
 
     // ---- helpers ----
 
+    private static EditedFields Flag(EditedFields flags, EditedFields flag, bool on) => on ? flags | flag : flags & ~flag;
+
     private static IQueryable<Resource> WithTags(IQueryable<Resource> q) => q.Include(r => r.ResourceTags).ThenInclude(rt => rt.Tag);
 
     public static ResourceDto ToDto(Resource r) => new(
         r.Id, r.Url, r.Title, r.Description, r.Notes, r.Type, r.CollectionId,
         [.. r.ResourceTags.Select(rt => rt.Tag.Name).Order(StringComparer.Ordinal)],
         r.FaviconUrl, r.ImageUrl, r.SiteName, r.Summary, r.SummarySource, r.IsFavourite, r.IsArchived, r.MetadataStatus,
-        r.CreatedAt, r.UpdatedAt);
+        r.MetadataError, r.CreatedAt, r.UpdatedAt);
 
     private async Task SetTagsAsync(Guid userId, Resource r, List<string> desired, HashSet<string> aiNames, CancellationToken ct)
     {

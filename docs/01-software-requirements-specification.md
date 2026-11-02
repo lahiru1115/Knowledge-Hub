@@ -609,6 +609,8 @@ erDiagram
     boolean is_favourite
     boolean is_archived
     text metadata_status
+    text metadata_error
+    int user_edited_fields
     text content_hash
     tsvector search_vector
     timestamptz created_at
@@ -771,6 +773,8 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 | summary_source | text | `none`, `extracted`, `ai`, `user` (FR-AI-11) |
 | is_favourite, is_archived | boolean | Default false |
 | metadata_status | text | `pending`, `ready`, `failed` |
+| metadata_error | text | Set when `metadata_status` is `failed`: `blocked_url`, `timeout`, `unreachable`, `http_error`, `not_html`, `too_large`, `too_many_redirects` |
+| user_edited_fields | integer | Bit flags (title 1, description 2, type 4) for fields the user typed; background extraction never overwrites them (FR-RES-03) |
 | content_hash | text | SHA-256 of the extracted text; used to skip re-indexing unchanged content |
 | tags_text | text | The resource's tag names joined by spaces; kept in step by the application when tags change, renamed or merged |
 | search_vector | tsvector | Generated column, weighted: title A, tags_text B, description C, notes and URL D; GIN index |

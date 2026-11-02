@@ -29,6 +29,7 @@ public interface IAppDbContext
     DbSet<Resource> Resources { get; }
     DbSet<Tag> Tags { get; }
     DbSet<ResourceTag> ResourceTags { get; }
+    DbSet<OutboxMessage> Outbox { get; }
     Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
     Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -19,6 +19,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Resource> Resources => Set<Resource>();
     public DbSet<Tag> Tags => Set<Tag>();
     public DbSet<ResourceTag> ResourceTags => Set<ResourceTag>();
+    public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
 
     private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web)
     {

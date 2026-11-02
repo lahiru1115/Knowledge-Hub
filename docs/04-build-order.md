@@ -49,7 +49,6 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 **Status:** 3.1 to 3.7 done except saved views (Could). The web screens are built: responsive app shell (top bar, sidebar, phone tab bar and Add button), library list with URL-based search, filters, sort and paging, bulk actions, quick-add with duplicate detection, the resource drawer (inline edit, tags, Markdown notes with autosave and conflict handling, summary), collections (list, collection page, create/edit/delete with the move-or-delete choice, Move up/down), the tags manager, toasts with Undo, and single-key shortcuts that can be turned off.
 
 Not built yet, deliberately (each depends on a later stage or is a Could):
-- **Needs Stage 4 (metadata):** the quick-add preview card, the shimmer on rows with pending metadata and the 2-second refetch, and "Retry" on failed rows. Resources stay `pending` until then.
 - **Needs Stage 5 (AI):** keyword/semantic switch, tag suggestions in quick-add, Summarise and Related in the drawer.
 - **Later polish (Should/Could):** grid view, drag and drop onto the sidebar (Move to… and Move up/down are the keyboard alternatives), the ⌘K command palette, search results as you type in the top bar, clipboard paste chip, the drawer beside the list at 1440 px and wider (it overlays today), clipboard-free share target (PWA).
 
@@ -76,6 +75,15 @@ Not built yet, deliberately (each depends on a later stage or is a Could):
 | 4.5 | Maintenance service: purge deleted resources after 7 days, expired tokens, old outbox rows | Doc 01 §6.4 |
 
 **Demo:** paste a URL and watch title, image and type fill in.
+
+**Status:** 4.1 to 4.5 done.
+- **Outbox (4.1):** events are written in the same transaction as the change (`resource.created|updated|content_changed|deleted|restored`, `user.deleted`). The worker claims with `FOR UPDATE SKIP LOCKED`, retries after 10 s × 2ⁿ with ±20 % jitter, marks a message dead after 8 attempts, takes back claims older than 5 minutes, and carries the trace ID across. The AI events complete at once for now (`AiEventPlaceholderHandler`); Stage 5 replaces that handler and runs a one-off re-index for resources saved before it. Password reset email stays on the in-memory sender, which has been reliable.
+- **Fetcher (4.2):** AngleSharp reads the Open Graph, Twitter and standard tags and the favicon; SmartReader reads the main text. Type guessing rules (`Metadata:TypeRules`: host, optional path pattern) fall back to built-in defaults. A user-typed title, description or type is never overwritten, and the job does not touch `updated_at`, so it cannot cause a false edit conflict.
+- **SSRF guard (4.3):** `SsrfPolicy` and `SafeConnector`. The connection goes to an address that was just checked, so a name that changes its answer gets no second chance. The blocked-URL suite covers private, loopback, link-local and cloud-metadata ranges, CGNAT, multicast, IPv4-mapped, NAT64 and 6to4 IPv6, numeric spellings, schemes, ports, credentials, and redirects to any of these.
+- **Endpoints and web (4.4):** `POST /metadata/preview` (20 a minute per user; a failed fetch is data, not an error) and `POST /resources/{id}/metadata/refresh`. Quick-add shows the preview card and sends a type only when the user picks one. Rows and the drawer show "Fetching details…" and "Couldn't fetch details · Retry"; the app polls every 2 s for up to 30 s after saving or retrying.
+- **Maintenance (4.5):** hourly; removes resources deleted over 7 days ago, sign-in tokens 7 days after expiry or revocation, reset tokens after 24 hours, outbox rows done over 7 days and dead over 30 days, audit events over 90 days.
+
+Not done: tag rename, merge and delete do not emit events, so the AI service learns of tag changes only when a resource's content changes (to be reviewed in Stage 5). Fetching real sites cannot be tested without the internet; the fetcher is tested against a local server and the worker with a scripted fetcher, and the browser tests cover the refused-address and unreachable paths.
 
 ## Stage 5 — AI service
 

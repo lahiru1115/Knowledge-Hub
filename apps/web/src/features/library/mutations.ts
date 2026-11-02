@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { api, unwrap } from '@/api/client'
 import { notifyError, notifyUndo } from '@/lib/toasts'
+import { watchMetadata } from './metadata'
 import { keys } from './queries'
 import type { BulkRequest, Resource, ResourceCreate, ResourcePage, ResourceUpdate } from './types'
 
@@ -55,7 +56,34 @@ export function useCreateResource() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (body: ResourceCreate) => unwrap(api.POST('/resources', { body })),
-    onSuccess: () => invalidateLibrary(qc),
+    onSuccess: (saved) => {
+      watchMetadata(saved.id)
+      return invalidateLibrary(qc)
+    },
+  })
+}
+
+/** "Retry" on a resource whose details could not be fetched: shows it as fetching straight away, then polls. */
+export function useRefreshMetadata() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) =>
+      unwrap(api.POST('/resources/{id}/metadata/refresh', { params: { path: { id } } })),
+    onMutate: async (id) => {
+      await qc.cancelQueries({ queryKey: keys.resources })
+      await qc.cancelQueries({ queryKey: keys.resource(id) })
+      watchMetadata(id)
+      return patchCached(qc, id, (r) => ({
+        ...r,
+        metadata_status: 'pending',
+        metadata_error: null,
+      }))
+    },
+    onError: (error, id, state) => {
+      if (state) rollback(qc, id, state)
+      notifyError(error)
+    },
+    onSettled: () => invalidateLibrary(qc),
   })
 }
 

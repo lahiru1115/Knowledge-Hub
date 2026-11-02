@@ -8,6 +8,8 @@
     <PackageReference Include="EFCore.NamingConventions" />
     <PackageReference Include="Konscious.Security.Cryptography.Argon2" />
     <PackageReference Include="MailKit" />
+    <PackageReference Include="AngleSharp" />
+    <PackageReference Include="SmartReader" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Design" PrivateAssets="all" />
     <EmbeddedResource Include="Security/common-passwords.txt" />

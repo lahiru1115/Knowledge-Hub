@@ -13,6 +13,7 @@ public static class RateLimiting
     public const string LoginPerIp = "login-ip";
     public const string RegisterPerIp = "register-ip";
     public const string ResetPerIp = "reset-ip";
+    public const string PreviewPerUser = "preview-user";
 
     public static IServiceCollection AddKnowledgeHubRateLimiting(this IServiceCollection services)
     {
@@ -38,6 +39,9 @@ public static class RateLimiting
                 _ => Window(limits.RegisterPerIpPerHour, TimeSpan.FromHours(1))));
             o.AddPolicy(ResetPerIp, http => RateLimitPartition.GetFixedWindowLimiter(Ip(http),
                 _ => Window(limits.ResetPerIpPerHour, TimeSpan.FromHours(1))));
+            o.AddPolicy(PreviewPerUser, http => RateLimitPartition.GetFixedWindowLimiter(
+                http.User.FindFirstValue("sub") ?? Ip(http),
+                _ => Window(limits.PreviewPerUserPerMinute, TimeSpan.FromMinutes(1))));
             // Everything else: per user when signed in, otherwise per IP.
             o.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(http =>
                 RateLimitPartition.GetFixedWindowLimiter(

@@ -1,4 +1,5 @@
 import { HttpResponse, http } from 'msw'
+import type { components } from '@/api/schema'
 import type { Collection, Resource } from '@/features/library/types'
 import { API, problem } from './helpers'
 import { server } from './server'
@@ -33,6 +34,7 @@ export function makeResource(over: Partial<Resource> = {}): Resource {
     is_favourite: false,
     is_archived: false,
     metadata_status: 'pending',
+    metadata_error: null,
     created_at: iso(n),
     updated_at: iso(n),
     ...over,
@@ -71,7 +73,13 @@ export interface FakeDb {
   ) => void
   last: (method: string, path: string) => RecordedRequest | undefined
   all: (method: string, path: string) => RecordedRequest[]
+  /** What POST /metadata/preview returns (default: a small page). */
+  preview: (url: string) => Preview
+  /** Updates a resource as the background job would, without touching updated_at. */
+  finishMetadata: (id: string, patch?: Partial<Resource>) => void
 }
+
+export type Preview = components['schemas']['MetadataPreview']
 
 /**
  * A small stateful stand-in for the library API: it filters, sorts and pages like the real one, applies edits, keeps a
@@ -86,6 +94,18 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
     failNext: () => undefined,
     last: (m, p) => [...db.requests].reverse().find((r) => r.method === m && r.path === p),
     all: (m, p) => db.requests.filter((r) => r.method === m && r.path === p),
+    preview: (url) => ({
+      title: `Preview of ${new URL(url).hostname}`,
+      description: 'A short description of the page.',
+      image_url: null,
+      favicon_url: null,
+      type: 'article',
+      error: null,
+    }),
+    finishMetadata: (id, patch = {}) => {
+      const r = find(id)
+      if (r) replace({ ...r, metadata_status: 'ready', metadata_error: null, ...patch })
+    },
   }
   const failures: { key: string; status: number; code: string; extra?: Record<string, unknown> }[] =
     []
@@ -187,6 +207,23 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       })
       db.resources = [r, ...db.resources]
       return HttpResponse.json(r, { status: 201 })
+    }),
+    http.post(`${API}/metadata/preview`, async ({ request }) => {
+      await record(request, '/metadata/preview')
+      const f = failure('POST', '/metadata/preview')
+      if (f) return f
+      const body = (await request.clone().json()) as { url: string }
+      return HttpResponse.json(db.preview(body.url))
+    }),
+    http.post(`${API}/resources/:id/metadata/refresh`, async ({ request, params }) => {
+      await record(request, '/resources/:id/metadata/refresh')
+      const f = failure('POST', '/resources/:id/metadata/refresh')
+      if (f) return f
+      const r = find(String(params.id))
+      if (!r) return problem(404, 'not_found')
+      const next = { ...r, metadata_status: 'pending' as const, metadata_error: null }
+      replace(next)
+      return HttpResponse.json(next, { status: 202 })
     }),
     http.get(`${API}/resources/check-url`, async ({ request }) => {
       await record(request, '/resources/check-url')

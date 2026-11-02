@@ -15,6 +15,7 @@ public sealed class AccountService(
     SessionIssuer sessions,
     AuditLog audit,
     IEmailSender email,
+    IOutbox outbox,
     ISessionCache sessionCache,
     IOptions<AuthOptions> options,
     IValidator<PasswordResetRequest> resetRequestValidator,
@@ -137,7 +138,7 @@ public sealed class AccountService(
     /// <summary>
     /// Deletes the user and all of their core data in one transaction (FR-AUTH-09, DR-03). Only an
     /// <c>account.deleted</c> audit event survives, holding the user ID and no email.
-    /// The <c>user.deleted</c> outbox event that purges the AI service's data is added with the outbox (Stage 4).
+    /// A <c>user.deleted</c> outbox event, written in the same transaction, makes the AI service purge its data.
     /// </summary>
     public async Task DeleteAccountAsync(Guid userId, string? password, CancellationToken ct)
     {
@@ -160,6 +161,8 @@ public sealed class AccountService(
         await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct); // refresh and reset tokens cascade
         db.ChangeTracker.Clear();
         audit.Write("account.deleted", userId);
+        // The AI service removes everything it holds for this user (FR-AUTH-09); written in the same transaction.
+        outbox.Add(OutboxEventTypes.UserDeleted, new { user_id = userId });
         await db.SaveChangesAsync(ct);
         await tx.CommitAsync(ct);
         sessionCache.Forget(userId);

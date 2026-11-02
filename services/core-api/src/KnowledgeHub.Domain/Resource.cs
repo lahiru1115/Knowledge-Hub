@@ -24,6 +24,12 @@ public sealed class Resource : IOwned
     public bool IsFavourite { get; set; }
     public bool IsArchived { get; set; }
     public MetadataStatus MetadataStatus { get; set; } = MetadataStatus.Pending;
+    /// <summary>Set when <see cref="MetadataStatus"/> is failed; cleared when a new attempt starts.</summary>
+    public MetadataError? MetadataError { get; set; }
+    /// <summary>Fields the user typed, which extraction must not overwrite.</summary>
+    public EditedFields UserEditedFields { get; set; }
+    /// <summary>SHA-256 of the extracted text, so unchanged content is not indexed again.</summary>
+    public string? ContentHash { get; set; }
     /// <summary>
     /// The tag names joined by spaces; kept in step with the tags and indexed for search (Doc 02 §7.2). The database
     /// builds the weighted search vector from this and the other text fields; the model maps it as a shadow column.

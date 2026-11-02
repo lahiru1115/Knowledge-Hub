@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { siteOf, timeAgo } from '@/lib/format'
+import { FetchStatus } from './FetchStatus'
 import { typeLabel, type Resource, type ResourceType } from './types'
 
 const ICONS: Record<ResourceType, LucideIcon> = {
@@ -106,6 +107,7 @@ export function ResourceRow({
           {siteOf(r.url)} · {typeLabel(r.type)}
           {r.is_archived && ' · Archived'}
         </p>
+        <FetchStatus resource={r} className="mt-1" />
         {r.description && <p className="mt-1 line-clamp-2 text-sm">{r.description}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           {r.tags.length > 0 && (

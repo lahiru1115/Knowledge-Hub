@@ -11,3 +11,5 @@ migrate-core`).
 3. Do not run Mailpit on the same ports: the tests start a small mail server of their own (SMTP :1025, HTTP :8025)
    so they can read password reset emails.
 4. `npm run e2e` from `apps/web` (Playwright starts the Vite dev server).
+5. Leave the outbox worker on (the default). Two tests rely on it: one saves a link to a private address and
+   expects the server to refuse it, the other saves an unreachable host. Neither needs the internet.

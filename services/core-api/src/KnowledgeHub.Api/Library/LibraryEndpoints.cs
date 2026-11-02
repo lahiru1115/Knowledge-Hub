@@ -1,4 +1,5 @@
 using KnowledgeHub.Application.Common;
+using KnowledgeHub.Api.Http;
 using KnowledgeHub.Application.Library;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -75,8 +76,14 @@ public static class LibraryEndpoints
             await s.DeleteAsync(u.UserId!.Value, id, ct);
             return TypedResults.NoContent();
         });
+        resources.MapPost("/{id:guid}/metadata/refresh", async (Guid id, ICurrentUser u, ResourceService s, CancellationToken ct) =>
+            TypedResults.Accepted((string?)null, await s.RefreshMetadataAsync(u.UserId!.Value, id, ct)));
         resources.MapPost("/{id:guid}/restore", async (Guid id, ICurrentUser u, ResourceService s, CancellationToken ct) =>
             TypedResults.Ok(await s.RestoreAsync(u.UserId!.Value, id, ct)));
+
+        api.MapPost("/metadata/preview", async (MetadataPreviewRequest body, MetadataPreviewService s, CancellationToken ct) =>
+                TypedResults.Ok(await s.PreviewAsync(body.Url, ct)))
+            .RequireAuthorization().RequireRateLimiting(RateLimiting.PreviewPerUser);
 
         var tags = api.MapGroup("/tags").RequireAuthorization();
         tags.MapGet("", async (ICurrentUser u, TagService s, CancellationToken ct) =>

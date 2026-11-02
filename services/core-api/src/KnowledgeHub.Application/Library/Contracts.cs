@@ -25,7 +25,7 @@ public sealed record ResourceDto(
     Guid Id, string Url, string? Title, string? Description, string? Notes, ResourceType Type, Guid? CollectionId,
     IReadOnlyList<string> Tags, string? FaviconUrl, string? ImageUrl, string? SiteName, string? Summary,
     SummarySource SummarySource, bool IsFavourite, bool IsArchived, MetadataStatus MetadataStatus,
-    DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    MetadataError? MetadataError, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 
 public sealed record ResourceCreate(
     string? Url, string? Title, string? Description, string? Notes, ResourceType? Type, Guid? CollectionId,
@@ -67,3 +67,9 @@ public sealed record TagListDto(IReadOnlyList<TagDto> Items);
 public sealed record RenameTagRequest(string? Name);
 
 public sealed record MergeTagRequest(Guid? TargetTagId);
+
+/// <summary>What a link would look like if saved. On failure the fields are empty and <see cref="Error"/> says why.</summary>
+public sealed record MetadataPreviewDto(
+    string? Title, string? Description, string? ImageUrl, string? FaviconUrl, ResourceType? Type, MetadataError? Error);
+
+public sealed record MetadataPreviewRequest(string? Url);

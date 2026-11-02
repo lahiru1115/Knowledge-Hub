@@ -788,6 +788,11 @@ export interface components {
         SummarySource: "none" | "extracted" | "ai" | "user";
         /** @enum {string} */
         MetadataStatus: "pending" | "ready" | "failed";
+        /**
+         * @description Why details could not be fetched. `blocked_url` means the address is not one the server may visit (private network, odd port, non-web scheme).
+         * @enum {string}
+         */
+        MetadataError: "blocked_url" | "timeout" | "unreachable" | "http_error" | "not_html" | "too_large" | "too_many_redirects";
         /** @enum {string} */
         AiOperation: "summarize" | "suggest_tags" | "embed" | "search" | "chat";
         /**
@@ -907,6 +912,8 @@ export interface components {
             is_favourite: boolean;
             is_archived: boolean;
             metadata_status: components["schemas"]["MetadataStatus"];
+            /** @description Set when `metadata_status` is `failed` */
+            metadata_error: components["schemas"]["MetadataError"] | null;
             /** Format: date-time */
             created_at: string;
             /** Format: date-time */
@@ -960,7 +967,9 @@ export interface components {
             description?: string | null;
             image_url?: string | null;
             favicon_url?: string | null;
-            type?: components["schemas"]["ResourceType"];
+            type?: components["schemas"]["ResourceType"] | null;
+            /** @description Set when nothing could be fetched; the other fields are then null */
+            error?: components["schemas"]["MetadataError"] | null;
         };
         SavedViewInput: {
             name: string;

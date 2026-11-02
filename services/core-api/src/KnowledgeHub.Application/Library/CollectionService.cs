@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace KnowledgeHub.Application.Library;
 
 /// <summary>Collections (FR-COL-01 to 05). Every query starts from <c>OwnedBy(userId)</c>; a foreign ID is a 404.</summary>
-public sealed class CollectionService(IAppDbContext db, IClock clock)
+public sealed class CollectionService(IAppDbContext db, IClock clock, IOutbox outbox)
 {
     public async Task<CollectionListDto> ListAsync(Guid userId, CancellationToken ct)
     {
@@ -45,8 +45,14 @@ public sealed class CollectionService(IAppDbContext db, IClock clock)
         var position = await db.Collections.OwnedBy(userId).MaxAsync(c => (int?)c.Position, ct) ?? -1;
         var collection = new Collection
         {
-            UserId = userId, Name = name!, Description = description, Color = color, Icon = icon,
-            Position = position + 1, CreatedAt = now, UpdatedAt = now,
+            UserId = userId,
+            Name = name!,
+            Description = description,
+            Color = color,
+            Icon = icon,
+            Position = position + 1,
+            CreatedAt = now,
+            UpdatedAt = now,
         };
         db.Collections.Add(collection);
         await SaveAsync(ct);
@@ -115,8 +121,17 @@ public sealed class CollectionService(IAppDbContext db, IClock clock)
         foreach (var r in resources)
         {
             if (r.DeletedAt is not null) r.CollectionId = null;
-            else if (mode == DeleteCollectionMode.Delete) { r.DeletedAt = now; r.CollectionId = null; }
-            else r.CollectionId = targetId;
+            else if (mode == DeleteCollectionMode.Delete)
+            {
+                r.DeletedAt = now;
+                r.CollectionId = null;
+                outbox.Add(OutboxEventTypes.ResourceDeleted, new { resource_id = r.Id, user_id = userId });
+            }
+            else
+            {
+                r.CollectionId = targetId;
+                outbox.Add(OutboxEventTypes.ResourceUpdated, new { resource_id = r.Id, user_id = userId, url_changed = false });
+            }
             r.UpdatedAt = now;
         }
 

@@ -31,6 +31,7 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet'
+import { Skeleton } from '@/components/ui/skeleton'
 import { Textarea } from '@/components/ui/textarea'
 import { keepOpenForLocalEscape } from '@/lib/shortcuts'
 import { useDebounced } from '@/lib/useDebounced'
@@ -40,7 +41,9 @@ import { CollectionSelect } from './CollectionSelect'
 import { useCreateResource, invalidateLibrary } from './mutations'
 import { collectionsQuery } from './queries'
 import { TagInput } from './TagInput'
-import { RESOURCE_TYPES, type ResourceType } from './types'
+import { RESOURCE_TYPES, typeLabel, type ResourceType } from './types'
+
+const AUTO = 'auto'
 
 interface Initial {
   url?: string
@@ -123,6 +126,64 @@ function QuickAddDialog({ initial, onClose }: { initial: Initial; onClose: () =>
   )
 }
 
+/** What the link looks like, fetched while the user types (FR-RES-01). Saving never waits for it. */
+function PreviewCard({ url, current }: { url: string; current: string }) {
+  const enabled = looksLikeUrl(url)
+  const preview = useQuery({
+    queryKey: ['preview', url],
+    queryFn: () => unwrap(api.POST('/metadata/preview', { body: { url } })),
+    enabled,
+    retry: false,
+    staleTime: 5 * 60_000,
+  })
+  // Hidden while the user is still typing a different address, so a stale card is never shown.
+  if (!enabled || url !== current) return null
+  if (preview.isPending)
+    return (
+      <div
+        aria-busy="true"
+        aria-label="Loading a preview"
+        className="flex gap-3 rounded-md border border-border p-3"
+      >
+        <Skeleton className="size-12 shrink-0 rounded" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-4 w-3/4" />
+          <Skeleton className="h-3 w-full" />
+        </div>
+      </div>
+    )
+  const p = preview.data
+  if (preview.isError || !p || p.error || !(p.title ?? p.description))
+    return (
+      <p className="text-sm text-muted-foreground">
+        Couldn't load a preview. You can still save it.
+      </p>
+    )
+  return (
+    <div
+      className="flex gap-3 rounded-md border border-border p-3"
+      aria-label="Preview"
+      role="group"
+    >
+      {p.image_url && (
+        <img
+          src={p.image_url}
+          alt=""
+          className="size-12 shrink-0 rounded object-cover"
+          loading="lazy"
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        {p.title && <p className="truncate text-sm font-medium">{p.title}</p>}
+        {p.description && (
+          <p className="line-clamp-2 text-sm text-muted-foreground">{p.description}</p>
+        )}
+        {p.type && <p className="mt-1 text-xs text-muted-foreground">{typeLabel(p.type)}</p>}
+      </div>
+    </div>
+  )
+}
+
 function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => void }) {
   const qc = useQueryClient()
   const navigate = useNavigate()
@@ -135,7 +196,8 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
   const [collectionId, setCollectionId] = useState<string | null>(initial.collectionId ?? null)
   const [details, setDetails] = useState(false)
   const [title, setTitle] = useState('')
-  const [type, setType] = useState<ResourceType>('website')
+  // Sent only when the user picks one: otherwise the fetched details decide (FR-META-02).
+  const [type, setType] = useState<ResourceType | typeof AUTO>(AUTO)
   const [notes, setNotes] = useState('')
   const [dismissedDuplicate, setDismissedDuplicate] = useState(false)
 
@@ -165,7 +227,7 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
         collection_id: collectionId,
         ...(title.trim() ? { title: title.trim() } : {}),
         ...(notes.trim() ? { notes } : {}),
-        type,
+        ...(type === AUTO ? {} : { type }),
       })
       const where = collectionId
         ? (collections?.items.find((c) => c.id === collectionId)?.name ?? 'collection')
@@ -265,6 +327,8 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
         </Alert>
       )}
 
+      {!showDuplicate && <PreviewCard url={debouncedUrl} current={url.trim()} />}
+
       <TagInput value={tags} onChange={setTags} />
 
       <Field>
@@ -306,13 +370,14 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
               <Select
                 value={type}
                 onValueChange={(v) => {
-                  setType(v as ResourceType)
+                  setType(v as ResourceType | typeof AUTO)
                 }}
               >
                 <SelectTrigger id="qa-type" className="w-full">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value={AUTO}>Detect automatically</SelectItem>
                   {RESOURCE_TYPES.map((t) => (
                     <SelectItem key={t.value} value={t.value}>
                       {t.label}

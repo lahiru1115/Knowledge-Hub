@@ -40,8 +40,12 @@ public class ResourceTests(ApiFactory factory)
 
         var r = await c.CreateResourceAsync("https://example.com/a", new
         {
-            title = "  A title ", description = "About it", notes = "# Notes\n\n- one", type = "video",
-            collection_id = col.Id(), tags = new[] { " Machine  Learning ", "machine learning", "C#", "node.js" },
+            title = "  A title ",
+            description = "About it",
+            notes = "# Notes\n\n- one",
+            type = "video",
+            collection_id = col.Id(),
+            tags = new[] { " Machine  Learning ", "machine learning", "C#", "node.js" },
         });
 
         Assert.Equal("A title", r.GetProperty("title").GetString());
@@ -126,7 +130,9 @@ public class ResourceTests(ApiFactory factory)
         var c = await factory.UserAsync();
         await c.CreateResourceAsync("https://example.com/" + new string('a', 2048 - 20), new
         {
-            title = new string('t', 300), description = new string('d', 2000), notes = new string('n', 100_000),
+            title = new string('t', 300),
+            description = new string('d', 2000),
+            notes = new string('n', 100_000),
             tags = Enumerable.Range(0, 20).Select(i => $"tag{i}").ToArray(),
         });
     }

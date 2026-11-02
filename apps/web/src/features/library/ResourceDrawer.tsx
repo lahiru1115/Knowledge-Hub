@@ -43,6 +43,7 @@ import { keepOpenForLocalEscape, useKeyShortcuts } from '@/lib/shortcuts'
 import { notifyError, notifyUndo } from '@/lib/toasts'
 import { cn } from '@/lib/utils'
 import { CollectionSelect } from './CollectionSelect'
+import { FetchStatus } from './FetchStatus'
 import { invalidateLibrary, useDeleteResource, useUpdateResource } from './mutations'
 import { NotesEditor } from './NotesEditor'
 import { keys, resourceQuery } from './queries'
@@ -277,6 +278,9 @@ function DrawerBody({ resource, onClose }: { resource: Resource; onClose: () => 
             </Button>
           </p>
         </div>
+
+        <FetchStatus resource={resource} />
+        {resource.description && <p className="text-sm">{resource.description}</p>}
 
         <div className="space-y-2">
           {editingUrl ? (

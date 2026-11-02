@@ -68,8 +68,7 @@ describe('quick-add', () => {
     expect(db.last('POST', '/resources')?.body).toEqual({
       url: 'https://example.org/new-thing',
       tags: [],
-      collection_id: null,
-      type: 'website',
+      collection_id: null, // no type: the fetched details decide it unless the user picks one
     })
     expect(
       await screen.findByRole('button', { name: 'https://example.org/new-thing' }),

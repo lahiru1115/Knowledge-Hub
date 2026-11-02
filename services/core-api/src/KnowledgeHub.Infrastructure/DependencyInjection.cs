@@ -2,12 +2,16 @@ using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
 using KnowledgeHub.Application.Library;
 using KnowledgeHub.Infrastructure.Library;
+using KnowledgeHub.Infrastructure.Maintenance;
+using KnowledgeHub.Infrastructure.Metadata;
+using KnowledgeHub.Infrastructure.Outbox;
 using KnowledgeHub.Infrastructure.Email;
 using KnowledgeHub.Infrastructure.Persistence;
 using KnowledgeHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace KnowledgeHub.Infrastructure;
 
@@ -18,11 +22,31 @@ public static class DependencyInjection
         var connectionString = configuration.GetConnectionString("Core")
             ?? throw new InvalidOperationException("ConnectionStrings:Core is not configured.");
 
-        services.AddDbContext<AppDbContext>(o => ConfigureDb(o, connectionString));
+        services.AddOptions<OutboxOptions>().Bind(configuration.GetSection(OutboxOptions.Section));
+        services.AddSingleton<OutboxSignal>();
+        services.AddSingleton<OutboxSignalInterceptor>();
+        services.AddDbContext<AppDbContext>((sp, o) =>
+        {
+            ConfigureDb(o, connectionString);
+            o.AddInterceptors(sp.GetRequiredService<OutboxSignalInterceptor>());
+        });
+        services.AddSingleton<OutboxProcessor>();
+        services.AddHostedService<OutboxWorker>();
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
+        services.AddOptions<MaintenanceOptions>().Bind(configuration.GetSection(MaintenanceOptions.Section));
+        services.AddScoped<MaintenanceService>();
+        services.AddHostedService<MaintenanceWorker>();
 
         services.AddScoped<IResourceSearch, ResourceSearch>();
         services.AddScoped<ITagsTextSync, TagsTextSync>();
+
+        services.AddOptions<MetadataOptions>().Bind(configuration.GetSection(MetadataOptions.Section));
+        services.TryAddSingleton<ISsrfPolicy, SsrfPolicy>();
+        services.TryAddSingleton<IHostResolver, SystemHostResolver>();
+        services.AddSingleton<TypeGuesser>();
+        services.AddSingleton<HtmlMetadataParser>();
+        services.TryAddSingleton<IMetadataFetcher, MetadataFetcher>();
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();

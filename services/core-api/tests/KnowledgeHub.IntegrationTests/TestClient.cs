@@ -17,11 +17,11 @@ public sealed class TestClient
     };
 
     private readonly HttpClient _http;
-    private readonly ApiFactory _factory;
+    private readonly WebApplicationFactory<Program> _factory;
     public string? Csrf { get; private set; }
     public string? LastRefreshCookie { get; private set; }
 
-    public TestClient(ApiFactory factory)
+    public TestClient(WebApplicationFactory<Program> factory)
     {
         _factory = factory;
         _http = factory.CreateClient(new WebApplicationFactoryClientOptions

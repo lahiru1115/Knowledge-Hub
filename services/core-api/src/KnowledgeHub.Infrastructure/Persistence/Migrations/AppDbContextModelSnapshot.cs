@@ -131,6 +131,76 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                     b.ToTable("collections", "core");
                 });
 
+            modelBuilder.Entity("KnowledgeHub.Domain.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Attempts")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempts");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTimeOffset?>("LockedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_at");
+
+                    b.Property<DateTimeOffset>("NextAttemptAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTimeOffset?>("ProcessedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("processed_at");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Traceparent")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("traceparent");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_outbox");
+
+                    b.HasIndex("NextAttemptAt")
+                        .HasDatabaseName("ix_outbox_next_attempt_at")
+                        .HasFilter("status = 'pending'");
+
+                    b.HasIndex("Status", "ProcessedAt")
+                        .HasDatabaseName("ix_outbox_status_processed_at");
+
+                    b.ToTable("outbox", "core", t =>
+                        {
+                            t.HasCheckConstraint("ck_outbox_status", "status IN ('pending','processing','done','dead')");
+                        });
+                });
+
             modelBuilder.Entity("KnowledgeHub.Domain.PasswordResetToken", b =>
                 {
                     b.Property<Guid>("Id")
@@ -237,6 +307,11 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("collection_id");
 
+                    b.Property<string>("ContentHash")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("content_hash");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -267,6 +342,11 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                     b.Property<bool>("IsFavourite")
                         .HasColumnType("boolean")
                         .HasColumnName("is_favourite");
+
+                    b.Property<string>("MetadataError")
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("metadata_error");
 
                     b.Property<string>("MetadataStatus")
                         .IsRequired()
@@ -334,6 +414,12 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(2048)")
                         .HasColumnName("url_normalized");
 
+                    b.Property<int>("UserEditedFields")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasDefaultValue(0)
+                        .HasColumnName("user_edited_fields");
+
                     b.Property<Guid>("UserId")
                         .HasColumnType("uuid")
                         .HasColumnName("user_id");
@@ -373,6 +459,8 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
 
                     b.ToTable("resources", "core", t =>
                         {
+                            t.HasCheckConstraint("ck_resources_metadata_error", "metadata_error IS NULL OR metadata_error IN ('blocked_url','timeout','unreachable','http_error','not_html','too_large','too_many_redirects')");
+
                             t.HasCheckConstraint("ck_resources_metadata_status", "metadata_status IN ('pending','ready','failed')");
 
                             t.HasCheckConstraint("ck_resources_summary_source", "summary_source IN ('none','extracted','ai','user')");

@@ -6,7 +6,14 @@ const uniqueEmail = () => `e2e-${crypto.randomUUID()}@example.com`
 
 async function violations(page: Page) {
   // Dialogs and menus fade in; measuring contrast mid-fade gives false results.
-  await page.waitForFunction(() => document.getAnimations().every((a) => a.playState !== 'running'))
+  // (Endless animations, such as the loading shimmer, never finish and are not what causes false results.)
+  await page.waitForFunction(() =>
+    document
+      .getAnimations()
+      .every(
+        (a) => a.playState !== 'running' || a.effect?.getComputedTiming().iterations === Infinity,
+      ),
+  )
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze()
@@ -62,7 +69,7 @@ test.describe('the library, end to end', () => {
     await addViaDialog(page, 'https://www.npgsql.org/doc/performance.html', ['postgres', 'dotnet'])
     await expect(page.getByText('Saved to Inbox')).toBeVisible()
     const row = page.getByRole('list', { name: 'Resources' }).getByRole('listitem').first()
-    await expect(row.getByText('npgsql.org · Website')).toBeVisible()
+    await expect(row.getByText(/npgsql\.org · /)).toBeVisible() // the type may be refined once details arrive
     await expect(row.getByRole('button', { name: 'Filter by tag postgres' })).toBeVisible()
 
     await row
@@ -329,6 +336,47 @@ test.describe('the library, end to end', () => {
     await otherPage.goto('/tags')
     await expect(otherPage.getByText('No tags yet')).toBeVisible()
     await other.close()
+  })
+})
+
+test.describe('fetching details, end to end', () => {
+  test('a link to a private address is refused by the server, and the row and preview say so', async ({
+    page,
+  }) => {
+    await register(page)
+    await page.goto('/library')
+    await expect(page.getByText('Your library is empty.')).toBeVisible()
+    await page.keyboard.press('n')
+    const dialog = page.getByRole('dialog', { name: 'Add a resource' })
+    await dialog.getByLabel('URL').fill('http://169.254.169.254/latest/meta-data/')
+    await expect(dialog.getByText("Couldn't load a preview. You can still save it.")).toBeVisible()
+    await dialog.getByRole('button', { name: 'Save' }).click()
+    await expect(dialog).toBeHidden()
+
+    const row = page.getByRole('list', { name: 'Resources' }).getByRole('listitem').first()
+    // The background worker refuses the address; the page polls and then shows why.
+    await expect(row.getByText("This address can't be fetched.")).toBeVisible({ timeout: 20_000 })
+    await expect(row.getByText("Couldn't fetch details")).toBeVisible()
+    await expect(row.getByRole('button', { name: /Retry fetching/ })).toHaveCount(0)
+    expect(await violations(page), 'failed fetch').toEqual([])
+  })
+
+  test('a link that cannot be reached stays "fetching" while the server retries, and Retry is not offered yet', async ({
+    page,
+  }) => {
+    await register(page)
+    await page.goto('/library')
+    await expect(page.getByText('Your library is empty.')).toBeVisible()
+    await addViaDialog(page, 'https://no-such-host.invalid/page')
+    const row = page.getByRole('list', { name: 'Resources' }).getByRole('listitem').first()
+    await expect(row.getByText('Fetching details…')).toBeVisible()
+    expect(await violations(page), 'fetching').toEqual([])
+    await row
+      .getByRole('button', { name: 'https://no-such-host.invalid/page', exact: true })
+      .click()
+    await expect(
+      page.getByRole('dialog', { name: 'Resource' }).getByText('Fetching details…'),
+    ).toBeVisible()
   })
 })
 
