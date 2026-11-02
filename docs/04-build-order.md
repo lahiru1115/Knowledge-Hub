@@ -102,6 +102,11 @@ Not done: tag rename, merge and delete do not emit events, so the AI service lea
 
 **Demo:** semantic search finds a synonym; chat answers with citations.
 
+**Status:** 5.1 done; 5.2 done on the AI service side only.
+- **5.1:** FastAPI app (`create_app` factory), `/health/live` and `/health/ready` (ready checks the `ai` schema version), Problem Details errors in the Core API's shape, Alembic migration `0001` for `chunks` (one column for any vector size, partial HNSW index per model, generated `tsv`), `summaries`, `chat_sessions`, `chat_messages`, `usage`, a Dockerfile whose job is to serve only (migrations run as a separate one-shot `alembic upgrade head` as `ai_migrator`), and the `ai-service.yml` workflow (ruff, mypy, pgvector database, migrate, tests, migrate down and up, image build). Tests also check the `ai_app` role can use `ai` but not change it or read `core`.
+- **5.2 (AI side):** service JWT check — HS256 only, issuer, audience, expiry, required claims, lifetime at most 120 s; the user comes only from `sub`; `system` tokens need a scope and cannot act as a user. The Core API's `IAiClient` (signing, resilience pipeline, `ai_unavailable` mapping) is not written yet.
+- Not verified here: the Docker image build and the workflow itself (no Docker in this environment); the rest runs against a local PostgreSQL 16 with pgvector.
+
 ## Stage 6 — Insights, export, admin
 
 | # | Work | Requirements |

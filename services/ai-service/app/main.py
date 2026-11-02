@@ -1,0 +1,27 @@
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+
+from app import errors
+from app.api import health
+from app.config import Settings, get_settings
+from app.db import make_engine
+
+
+def create_app(settings: Settings | None = None) -> FastAPI:
+    settings = settings or get_settings()
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.engine = make_engine(settings)
+        try:
+            yield
+        finally:
+            await app.state.engine.dispose()
+
+    app = FastAPI(title="Knowledge Hub AI service", version="0.1.0", lifespan=lifespan, docs_url=None, redoc_url=None)
+    app.dependency_overrides[get_settings] = lambda: settings
+    errors.install(app)
+    app.include_router(health.router)
+    return app
