@@ -51,6 +51,25 @@ public sealed class RecordingAi : IAiClient
         return Task.FromResult(UsageAnswer());
     }
 
+    public ConcurrentQueue<(Guid User, string Query, int Limit)> Searches { get; } = new();
+    public Func<Guid, IReadOnlyList<AiSearchHit>> SearchAnswer { get; set; } = _ => [];
+    public ConcurrentQueue<(Guid User, Guid Resource, int Limit)> RelatedCalls { get; } = new();
+    public Func<Guid, IReadOnlyList<AiRelatedHit>> RelatedAnswer { get; set; } = _ => [];
+
+    public Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        Searches.Enqueue((userId, query, limit));
+        return Task.FromResult(SearchAnswer(userId));
+    }
+
+    public Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        RelatedCalls.Enqueue((userId, resourceId, limit));
+        return Task.FromResult(RelatedAnswer(resourceId));
+    }
+
     public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => Task.FromResult(StatusAnswer());
 
     public Task IndexAsync(Guid userId, Guid resourceId, AiIndexRequest request, CancellationToken ct)

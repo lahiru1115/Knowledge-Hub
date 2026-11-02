@@ -59,6 +59,20 @@ public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStat
         return new AiUsageInfo(r.ResetAt, [.. r.Items.Select(i => new AiUsageItem(i.Operation, i.Used, i.Limit))]);
     }
 
+    public async Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Post, "search", tokens.ForUser(userId),
+            JsonContent.Create(new { query, limit }, options: s_json), O.SearchTimeoutSeconds, ct);
+        return [.. Parse<SearchResponse>(body).Items.Select(i => new AiSearchHit(i.ResourceId, i.Snippet, i.Score))];
+    }
+
+    public async Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Get, $"resources/{resourceId}/related?limit={limit}", tokens.ForUser(userId),
+            null, O.SearchTimeoutSeconds, ct);
+        return [.. Parse<RelatedResponse>(body).Items.Select(i => new AiRelatedHit(i.ResourceId, i.Score))];
+    }
+
     public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => statusCache.GetAsync(async () =>
     {
         try
@@ -125,6 +139,10 @@ public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStat
     }
 
     private sealed record ProblemBody(string? Code, DateTimeOffset? ResetAt, int? RetryAfter);
+    private sealed record SearchItem(Guid ResourceId, string Snippet, double Score);
+    private sealed record SearchResponse(List<SearchItem> Items);
+    private sealed record RelatedItem(Guid ResourceId, double Score);
+    private sealed record RelatedResponse(List<RelatedItem> Items);
     private sealed record SummaryResponse(string Summary, string Source, string Model);
     private sealed record TagItem(string Name, bool Existing);
     private sealed record TagsResponse(List<TagItem> Items);
@@ -176,6 +194,12 @@ public sealed class DisabledAiClient : IAiClient
         throw new AiUnavailableException("AI features are switched off.");
 
     public Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct) =>
         throw new AiUnavailableException("AI features are switched off.");
 
     public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => Task.FromResult(new AiStatusInfo(false, "free", false));

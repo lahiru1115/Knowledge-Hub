@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import errors
-from app.api import ai, health, index
+from app.api import ai, health, index, search
 from app.config import Settings, get_settings
 from app.db import make_engine
 from app.providers import build_providers
@@ -29,4 +29,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health.router)
     app.include_router(index.router)
     app.include_router(ai.router)
+    app.include_router(search.router)
     return app

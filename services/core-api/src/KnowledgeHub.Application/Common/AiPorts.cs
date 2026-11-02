@@ -29,11 +29,19 @@ public interface IAiClient
 
     Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>Hybrid search over the user's chunks: at most one hit per resource, best first.</summary>
+    Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct);
+
+    /// <summary>Resources nearest to this one by embedding, best first, never the resource itself.</summary>
+    Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct);
+
     /// <summary>Never throws: an AI service that does not answer is reported as not available.</summary>
     Task<AiStatusInfo> GetStatusAsync(CancellationToken ct);
 }
 
 public sealed record AiSummary(string Summary, string Source, string Model);
+public sealed record AiSearchHit(Guid ResourceId, string Snippet, double Score);
+public sealed record AiRelatedHit(Guid ResourceId, double Score);
 public sealed record AiTagSuggestion(string Name, bool Existing);
 public sealed record AiUsageItem(string Operation, int Used, int? Limit);
 public sealed record AiUsageInfo(DateTimeOffset ResetAt, IReadOnlyList<AiUsageItem> Items);

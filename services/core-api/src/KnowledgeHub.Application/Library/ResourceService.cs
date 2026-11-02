@@ -25,6 +25,19 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         return ToDto(r);
     }
 
+    /// <summary>
+    /// The user's live, unarchived resources with these IDs, in the order given. IDs that are not the user's, are deleted
+    /// or are archived are left out, so an index that lags behind the library never shows stale results.
+    /// </summary>
+    public async Task<IReadOnlyList<ResourceDto>> GetManyAsync(Guid userId, IReadOnlyCollection<Guid> ids, CancellationToken ct)
+    {
+        if (ids.Count == 0) return [];
+        var found = await WithTags(db.Resources.OwnedBy(userId).AsNoTracking())
+            .Where(r => ids.Contains(r.Id) && !r.IsArchived).ToListAsync(ct);
+        var byId = found.ToDictionary(r => r.Id);
+        return [.. ids.Where(byId.ContainsKey).Select(id => ToDto(byId[id]))];
+    }
+
     public async Task<Page<ResourceDto>> ListAsync(Guid userId, ResourceListRequest request, CancellationToken ct)
     {
         var filter = BuildFilter(request);

@@ -10,6 +10,9 @@ public sealed record TagSuggestionsDto(IReadOnlyList<TagSuggestionItemDto> Items
 public sealed record TagSuggestionRequest(string? Url, Guid? ResourceId);
 public sealed record AiUsageItemDto(string Operation, int Used, int? Limit);
 public sealed record AiUsageDto(DateTimeOffset ResetAt, IReadOnlyList<AiUsageItemDto> Items);
+public sealed record SemanticItemDto(ResourceDto Resource, string Snippet, double Score);
+public sealed record SemanticSearchDto(IReadOnlyList<SemanticItemDto> Items, int Page, int PageSize, int Total, bool Fallback);
+public sealed record RelatedDto(IReadOnlyList<ResourceDto> Items);
 public sealed record AiStatusDto(bool Available, string Profile, bool ChatAvailable);
 
 /// <summary>
@@ -86,6 +89,51 @@ public sealed class AiFeaturesService(
             // Suggestions are a convenience: saving a link must not depend on them (FR-AI-09).
             return new TagSuggestionsDto([], AiAvailable: false);
         }
+    }
+
+    public const int MaxQueryLength = 500;
+    public const int DefaultPageSize = 20;
+    public const int MaxPageSize = 50;
+    public const int RelatedCount = 5;
+
+    /// <summary>
+    /// Search by meaning (FR-AI-05). When the AI service is down it falls back to keyword search and says so, so the
+    /// search box keeps working (FR-AI-09). A quota refusal is not a fallback case: it is reported as it is.
+    /// </summary>
+    public async Task<SemanticSearchDto> SemanticSearchAsync(Guid userId, string? query, int? pageSize, CancellationToken ct)
+    {
+        var q = query?.Trim();
+        if (string.IsNullOrEmpty(q)) throw AppException.Field("q", "Enter something to search for.");
+        if (q.Length > MaxQueryLength) throw AppException.Field("q", $"Use {MaxQueryLength} characters or fewer.");
+        var size = pageSize ?? DefaultPageSize;
+        if (size is < 1 or > MaxPageSize) throw AppException.Field("page_size", $"Use a number from 1 to {MaxPageSize}.");
+
+        try
+        {
+            // Ask for extra: hits for deleted or archived resources are dropped below.
+            var hits = await CallAsync(() => ai.SearchAsync(userId, q, Math.Min(MaxPageSize, size * 2), ct));
+            var found = await resources.GetManyAsync(userId, [.. hits.Select(h => h.ResourceId)], ct);
+            var byId = found.ToDictionary(r => r.Id);
+            var items = hits.Where(h => byId.ContainsKey(h.ResourceId)).Take(size)
+                .Select(h => new SemanticItemDto(byId[h.ResourceId], h.Snippet, h.Score)).ToList();
+            return new SemanticSearchDto(items, 1, size, items.Count, Fallback: false);
+        }
+        catch (AppException e) when (e.Code == ProblemCode.AiUnavailable)
+        {
+            var page = await resources.ListAsync(userId,
+                new ResourceListRequest(q, null, null, null, null, null, null, null, "relevance", 1, size), ct);
+            var items = page.Items.Select(r => new SemanticItemDto(r, r.Description ?? "", 0)).ToList();
+            return new SemanticSearchDto(items, 1, size, page.Total, Fallback: true);
+        }
+    }
+
+    /// <summary>Up to 5 other resources nearest to this one (FR-AI-07).</summary>
+    public async Task<RelatedDto> RelatedAsync(Guid userId, Guid id, CancellationToken ct)
+    {
+        if (!await db.Resources.OwnedBy(userId).AnyAsync(r => r.Id == id, ct)) throw new AppException(ProblemCode.NotFound);
+        var hits = await CallAsync(() => ai.RelatedAsync(userId, id, RelatedCount * 2, ct));
+        var found = await resources.GetManyAsync(userId, [.. hits.Select(h => h.ResourceId).Where(r => r != id)], ct);
+        return new RelatedDto([.. found.Take(RelatedCount)]);
     }
 
     public async Task<AiUsageDto> UsageAsync(Guid userId, CancellationToken ct)

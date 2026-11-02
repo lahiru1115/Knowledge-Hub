@@ -85,7 +85,9 @@ class IndexService:
                 )
                 return IndexResult("empty", 0)
 
-        chunks = chunk_document(document, data.title)
+        # The title is added to every chunk as a prefix, so it is left out of the text that is cut up.
+        body_document = build_document(None, data.description, data.notes, body)
+        chunks = chunk_document(body_document, data.title) if body_document else [(data.title or "").strip()]
         vectors: list[list[float]] = []
         for i in range(0, len(chunks), BATCH):
             vectors.extend(await self._embedder.embed_documents(chunks[i : i + BATCH]))

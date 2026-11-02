@@ -17,6 +17,8 @@ public sealed class AiOptions
     public int OtherTimeoutSeconds { get; set; } = 10;
     public int SummaryTimeoutSeconds { get; set; } = 20;
     public int TagTimeoutSeconds { get; set; } = 10;
+    /// <summary>Semantic search and related resources (Doc 02 §5.2).</summary>
+    public int SearchTimeoutSeconds { get; set; } = 5;
     public int StatusTimeoutSeconds { get; set; } = 2;
     public int StatusCacheSeconds { get; set; } = 10;
     /// <summary>Reported when the AI service cannot say (it is down): which profile this deployment is set up for.</summary>

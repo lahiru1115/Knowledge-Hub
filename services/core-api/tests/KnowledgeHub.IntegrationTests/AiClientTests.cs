@@ -347,4 +347,27 @@ public sealed class AiClientTests : IAsyncLifetime
         using var sp = Build(new() { ["Retries"] = "0" });
         Assert.False((await sp.GetRequiredService<IAiClient>().GetStatusAsync(TestContext.Current.CancellationToken)).Available);
     }
+
+    [Fact]
+    public async Task Search_posts_the_query_and_reads_hits_and_related_gets_with_a_limit()
+    {
+        var hit = Guid.NewGuid();
+        _respond = (seen, _) => seen.Path == "/search"
+            ? Results.Json(new { items = new[] { new { resource_id = hit, snippet = "a snippet", score = 0.03 } } })
+            : Results.Json(new { items = new[] { new { resource_id = hit, score = 0.8 } } });
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var user = Guid.NewGuid();
+        var resource = Guid.NewGuid();
+
+        var hits = await ai.SearchAsync(user, "vehicle", 20, TestContext.Current.CancellationToken);
+        var related = await ai.RelatedAsync(user, resource, 10, TestContext.Current.CancellationToken);
+
+        Assert.Equal([new AiSearchHit(hit, "a snippet", 0.03)], hits);
+        Assert.Equal([new AiRelatedHit(hit, 0.8)], related);
+        var calls = _seen.ToList();
+        Assert.Equal(("POST", "/search"), (calls[0].Method, calls[0].Path));
+        Assert.Equal("vehicle", JsonDocument.Parse(calls[0].Body).RootElement.GetProperty("query").GetString());
+        Assert.Equal(("GET", $"/resources/{resource}/related", "?limit=10"), (calls[1].Method, calls[1].Path, calls[1].Query));
+    }
 }
