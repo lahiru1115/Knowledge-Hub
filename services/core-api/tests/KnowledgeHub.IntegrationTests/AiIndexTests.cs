@@ -70,6 +70,85 @@ public sealed class RecordingAi : IAiClient
         return Task.FromResult(RelatedAnswer(resourceId));
     }
 
+    // ---- chat: a small in-memory AI service, so the Core API's part can be tested on its own ----
+
+    public sealed record FakeSession(Guid Id, Guid Owner, string Title, Guid? Scope, DateTimeOffset Created)
+    {
+        public List<AiChatMessage> Messages { get; } = [];
+    }
+
+    public ConcurrentDictionary<Guid, FakeSession> Sessions { get; } = new();
+    public ConcurrentQueue<(Guid User, Guid Session, string Content)> Questions { get; } = new();
+    public Func<IReadOnlyList<AiChatEvent>> AnswerEvents { get; set; } = () => [];
+    public Func<Exception?>? ChatOpenFailure { get; set; }
+    public TimeSpan EventDelay { get; set; }
+    public bool Disposed { get; set; }
+
+    public Task<AiChatSession> CreateChatSessionAsync(Guid userId, Guid? scopeCollectionId, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        var s = new FakeSession(Guid.NewGuid(), userId, "New chat", scopeCollectionId, DateTimeOffset.UtcNow);
+        Sessions[s.Id] = s;
+        return Task.FromResult(Map(s));
+    }
+
+    public Task<IReadOnlyList<AiChatSession>> ListChatSessionsAsync(Guid userId, CancellationToken ct) =>
+        Task.FromResult<IReadOnlyList<AiChatSession>>([.. Sessions.Values.Where(s => s.Owner == userId).OrderByDescending(s => s.Created).Select(Map)]);
+
+    private FakeSession Own(Guid userId, Guid id) =>
+        Sessions.TryGetValue(id, out var s) && s.Owner == userId ? s : throw new AiRejectedException(ProblemCode.NotFound);
+
+    public Task<AiChatDetail> GetChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct)
+    {
+        var s = Own(userId, sessionId);
+        return Task.FromResult(new AiChatDetail(Map(s), [.. s.Messages]));
+    }
+
+    public Task<AiChatSession> RenameChatSessionAsync(Guid userId, Guid sessionId, string title, CancellationToken ct)
+    {
+        var s = Own(userId, sessionId) with { Title = title };
+        Sessions[s.Id] = s;
+        return Task.FromResult(Map(s));
+    }
+
+    public Task DeleteChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct)
+    {
+        Own(userId, sessionId);
+        Sessions.TryRemove(sessionId, out _);
+        return Task.CompletedTask;
+    }
+
+    public Task<IAiChatAnswer> OpenChatAsync(Guid userId, Guid sessionId, string content, CancellationToken ct)
+    {
+        if (ChatOpenFailure?.Invoke() is { } e) throw e;
+        Own(userId, sessionId);
+        Questions.Enqueue((userId, sessionId, content));
+        return Task.FromResult<IAiChatAnswer>(new FakeAnswer(this, AnswerEvents()));
+    }
+
+    private sealed class FakeAnswer(RecordingAi owner, IReadOnlyList<AiChatEvent> events) : IAiChatAnswer
+    {
+        public async IAsyncEnumerable<AiChatEvent> ReadAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+        {
+            foreach (var e in events)
+            {
+                if (owner.EventDelay > TimeSpan.Zero) await Task.Delay(owner.EventDelay, ct);
+                yield return e;
+            }
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            owner.Disposed = true;
+            return ValueTask.CompletedTask;
+        }
+    }
+
+    private static AiChatSession Map(FakeSession s) => new(s.Id, s.Title, s.Scope, s.Created, s.Created);
+
+    public static AiChatEvent Event(string name, object data) =>
+        new(name, JsonSerializer.SerializeToElement(data));
+
     public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => Task.FromResult(StatusAnswer());
 
     public Task IndexAsync(Guid userId, Guid resourceId, AiIndexRequest request, CancellationToken ct)

@@ -2,7 +2,6 @@
 
 import dataclasses
 import random
-import re
 import uuid
 
 import pytest
@@ -11,33 +10,10 @@ from sqlalchemy import create_engine, text
 from app.indexing import vector_literal
 from app.retrieval.hybrid import fuse, or_query, snippet, vector_leg_sql
 from tests.conftest import MIGRATOR_URL, make_token
+from tests.fakes import ConceptEmbedder
 
 pytestmark = pytest.mark.db
-MODEL = "concept-model"
-GROUPS = [{"car", "automobile", "vehicle", "sedan"}, {"dog", "puppy", "canine"}, {"database", "postgres", "sql"}]
-
-
-class ConceptEmbedder:
-    """Words in the same group point the same way, so a synonym is close in vector space even with no shared word."""
-
-    model_id = MODEL
-    dimensions = 4
-
-    def __init__(self) -> None:
-        self.fail = False
-
-    def _vec(self, t: str) -> list[float]:
-        words = re.findall(r"\w+", t.lower())
-        v = [float(sum(w in g for w in words)) for g in GROUPS]
-        return [v[0], v[1], v[2], 0.5]  # a constant part, so text about nothing is not the same direction as anything
-
-    async def embed_documents(self, texts):
-        if self.fail:
-            raise RuntimeError("model unavailable")
-        return [self._vec(t) for t in texts]
-
-    async def embed_query(self, text):
-        return (await self.embed_documents([text]))[0]
+MODEL = ConceptEmbedder.model_id
 
 
 @pytest.fixture

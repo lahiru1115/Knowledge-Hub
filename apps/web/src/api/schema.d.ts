@@ -2489,6 +2489,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };
@@ -2519,6 +2520,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["CsrfFailed"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };
@@ -2544,6 +2546,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthenticated"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };
@@ -2568,6 +2571,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["CsrfFailed"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };
@@ -2601,6 +2605,7 @@ export interface operations {
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["CsrfFailed"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };

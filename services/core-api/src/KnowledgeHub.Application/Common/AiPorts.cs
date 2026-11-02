@@ -35,11 +35,39 @@ public interface IAiClient
     /// <summary>Resources nearest to this one by embedding, best first, never the resource itself.</summary>
     Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct);
 
+    // ---- chat (Doc 02 §5.2). Sessions live in the AI service; a missing or foreign session is a NotFound rejection. ----
+
+    Task<AiChatSession> CreateChatSessionAsync(Guid userId, Guid? scopeCollectionId, CancellationToken ct);
+    Task<IReadOnlyList<AiChatSession>> ListChatSessionsAsync(Guid userId, CancellationToken ct);
+    Task<AiChatDetail> GetChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct);
+    Task<AiChatSession> RenameChatSessionAsync(Guid userId, Guid sessionId, string title, CancellationToken ct);
+    Task DeleteChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct);
+
+    /// <summary>
+    /// Asks a question. Problems that come before the answer starts (no such chat, over the quota, service down) are
+    /// thrown here; once it returns, the answer is read as events and a failure part-way is an <c>error</c> event.
+    /// </summary>
+    Task<IAiChatAnswer> OpenChatAsync(Guid userId, Guid sessionId, string content, CancellationToken ct);
+
     /// <summary>Never throws: an AI service that does not answer is reported as not available.</summary>
     Task<AiStatusInfo> GetStatusAsync(CancellationToken ct);
 }
 
 public sealed record AiSummary(string Summary, string Source, string Model);
+public sealed record AiChatSession(Guid Id, string Title, Guid? ScopeCollectionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+public sealed record AiChatCitation(int N, Guid ResourceId, string? Title, string? Quote);
+public sealed record AiChatMessage(Guid Id, string Role, string Content, IReadOnlyList<AiChatCitation> Citations, DateTimeOffset CreatedAt);
+public sealed record AiChatDetail(AiChatSession Session, IReadOnlyList<AiChatMessage> Messages);
+
+/// <summary>One server-sent event from the AI service: <c>token</c>, <c>citations</c>, <c>done</c> or <c>error</c>.</summary>
+public sealed record AiChatEvent(string Name, System.Text.Json.JsonElement Data);
+
+/// <summary>An answer being read. Disposing it closes the connection to the AI service.</summary>
+public interface IAiChatAnswer : IAsyncDisposable
+{
+    IAsyncEnumerable<AiChatEvent> ReadAsync(CancellationToken ct);
+}
+
 public sealed record AiSearchHit(Guid ResourceId, string Snippet, double Score);
 public sealed record AiRelatedHit(Guid ResourceId, double Score);
 public sealed record AiTagSuggestion(string Name, bool Existing);

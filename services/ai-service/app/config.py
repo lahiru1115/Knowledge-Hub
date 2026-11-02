@@ -20,6 +20,14 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", alias="EMBEDDING_MODEL")
     model_cache_dir: str | None = Field(default=None, alias="MODEL_CACHE_DIR")
 
+    ollama_base_url: str = Field(default="http://localhost:11434", alias="OLLAMA_BASE_URL")
+    llm_model: str = Field(default="llama3.2:3b", alias="LLM_MODEL")
+    #: How close in meaning a chunk must be (cosine similarity) to count as relevant when no word matches.
+    #: Not calibrated yet: the evaluation set (step 5.8) is where this gets tuned.
+    chat_min_similarity: float = Field(default=0.5, alias="CHAT_MIN_SIMILARITY", ge=0, le=1)
+    chat_first_token_seconds: float = Field(default=15.0, alias="CHAT_FIRST_TOKEN_SECONDS", gt=0)
+    chat_total_seconds: float = Field(default=120.0, alias="CHAT_TOTAL_SECONDS", gt=0)
+
     # Daily per-user limits (Appendix C). Leave unset for the profile's defaults; set to 0 or more to override.
     quota_summarize: int | None = Field(default=None, alias="QUOTA_SUMMARIZE", ge=0)
     quota_suggest_tags: int | None = Field(default=None, alias="QUOTA_SUGGEST_TAGS", ge=0)

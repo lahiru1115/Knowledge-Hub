@@ -51,7 +51,15 @@ class Tagger(Protocol):
     ) -> list[str]: ...
 
 
+class LlmUnavailable(Exception):
+    """The language model did not answer in time or at all (becomes an `ai_unavailable` event)."""
+
+
 class LlmProvider(Protocol):
+    """Streams an answer: text pieces, then one final `Usage`. It has no tools and cannot fetch or write anything."""
+
     model_id: str
 
-    def stream_chat(self, system: str, messages: Sequence[dict[str, str]]) -> AsyncIterator[str]: ...
+    def stream_chat(self, system: str, messages: Sequence[dict[str, str]]) -> AsyncIterator[str | Usage]: ...
+
+    async def available(self) -> bool: ...

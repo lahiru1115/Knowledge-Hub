@@ -26,5 +26,5 @@ async def ready(request: Request, response: Response) -> dict[str, object]:
         "status": "ok",
         "schema_version": str(version),
         "profile": request.app.state.providers.profile,
-        "chat_available": False,  # chat arrives in step 5.7
+        "chat_available": await request.app.state.providers.llm.available(),
     }

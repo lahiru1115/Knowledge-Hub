@@ -19,6 +19,18 @@ _WORD = re.compile(r"\w+", re.UNICODE)
 
 
 @dataclass(frozen=True)
+class ChunkHit:
+    """One chunk found by search, with why it was found: a keyword match, and/or how close its meaning is."""
+
+    resource_id: uuid.UUID
+    chunk_id: uuid.UUID
+    content: str
+    score: float
+    keyword: bool
+    similarity: float | None
+
+
+@dataclass(frozen=True)
 class Hit:
     resource_id: uuid.UUID
     chunk_id: uuid.UUID
@@ -72,7 +84,9 @@ def scope_sql(with_collection: bool) -> str:
 def vector_leg_sql(dims: int, with_collection: bool = False) -> str:
     """The nearest-chunks query. Its cast and model filter match the partial HNSW index, so the index is usable."""
     return (
-        f"SELECT id, resource_id, content FROM ai.chunks WHERE {scope_sql(with_collection)} "  # noqa: S608
+        f"SELECT id, resource_id, content, "  # noqa: S608
+        f"1 - (embedding::public.vector({int(dims)}) <=> CAST(:q AS public.vector({int(dims)}))) AS sim "
+        f"FROM ai.chunks WHERE {scope_sql(with_collection)} "
         f"ORDER BY embedding::public.vector({int(dims)}) <=> CAST(:q AS public.vector({int(dims)})) LIMIT :n"
     )
 
@@ -86,16 +100,15 @@ async def _allow_iterative_scan(conn: AsyncConnection) -> None:
         pass
 
 
-async def hybrid_search(
+async def hybrid_chunks(
     engine: AsyncEngine,
     embedder: Embedder,
     user_id: uuid.UUID,
     query: str,
     *,
-    limit: int = 20,
     collection_id: uuid.UUID | None = None,
-) -> list[Hit]:
-    """At most one hit per resource, best first. Every query is filtered by `user_id` and the embedder's model."""
+) -> list[ChunkHit]:
+    """The best chunks, best first (several may come from one resource). Filtered by the caller and the model."""
     query_vector = vector_literal(await embedder.embed_query(query))
     dims = int(embedder.dimensions)  # an int from our own code, interpolated because a cast cannot take a parameter
     scope = scope_sql(collection_id is not None)
@@ -121,13 +134,30 @@ async def hybrid_search(
                 )
             ).all()
 
-    by_chunk = {r.id: r for r in [*vector_rows, *keyword_rows]}
+    by_chunk = {r.id: r for r in [*keyword_rows, *vector_rows]}
+    similarity = {r.id: float(r.sim) for r in vector_rows}
+    keyword_ids = {r.id for r in keyword_rows}
     scores = fuse([r.id for r in vector_rows], [r.id for r in keyword_rows])
+    return [
+        ChunkHit(by_chunk[cid].resource_id, cid, by_chunk[cid].content, score, cid in keyword_ids, similarity.get(cid))
+        for cid, score in sorted(scores.items(), key=lambda kv: kv[1], reverse=True)
+    ]
+
+
+async def hybrid_search(
+    engine: AsyncEngine,
+    embedder: Embedder,
+    user_id: uuid.UUID,
+    query: str,
+    *,
+    limit: int = 20,
+    collection_id: uuid.UUID | None = None,
+) -> list[Hit]:
+    """At most one hit per resource, best first, the best chunk being its snippet."""
     best: dict[uuid.UUID, Hit] = {}
-    for cid, score in sorted(scores.items(), key=lambda kv: kv[1], reverse=True):
-        row = by_chunk[cid]
-        if row.resource_id not in best:  # chunks arrive best first, so the first one per resource is its snippet
-            best[row.resource_id] = Hit(row.resource_id, cid, row.content, score)
+    for c in await hybrid_chunks(engine, embedder, user_id, query, collection_id=collection_id):
+        if c.resource_id not in best:  # chunks arrive best first, so the first one per resource is its snippet
+            best[c.resource_id] = Hit(c.resource_id, c.chunk_id, c.content, c.score)
     return list(best.values())[:limit]
 
 

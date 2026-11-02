@@ -370,4 +370,127 @@ public sealed class AiClientTests : IAsyncLifetime
         Assert.Equal("vehicle", JsonDocument.Parse(calls[0].Body).RootElement.GetProperty("query").GetString());
         Assert.Equal(("GET", $"/resources/{resource}/related", "?limit=10"), (calls[1].Method, calls[1].Path, calls[1].Query));
     }
+
+    // ---------- chat ----------
+
+    private static IResult Sse(string text) => Results.Text(text, "text/event-stream");
+
+    private static async Task<List<AiChatEvent>> ReadAll(IAiChatAnswer answer)
+    {
+        await using (answer)
+        {
+            var list = new List<AiChatEvent>();
+            await foreach (var e in answer.ReadAsync(TestContext.Current.CancellationToken)) list.Add(e);
+            return list;
+        }
+    }
+
+    [Fact]
+    public async Task Chat_events_are_read_one_by_one_and_comments_are_skipped()
+    {
+        _respond = (_, _) => Sse(": hello\n\nevent: token\ndata: {\"text\":\"Hi \"}\n\n: keep-alive\n\nevent: token\ndata: {\"text\":\"there\"}\n\nevent: done\ndata: {\"message_id\":\"m\",\"usage\":{\"tokens_in\":1,\"tokens_out\":2}}\n\n");
+        using var sp = Build();
+        var user = Guid.NewGuid();
+        var session = Guid.NewGuid();
+
+        var events = await ReadAll(await sp.GetRequiredService<IAiClient>().OpenChatAsync(user, session, "Hello?", TestContext.Current.CancellationToken));
+
+        Assert.Equal(["token", "token", "done"], events.Select(e => e.Name));
+        Assert.Equal("Hi ", events[0].Data.GetProperty("text").GetString());
+        Assert.Equal(2, events[2].Data.GetProperty("usage").GetProperty("tokens_out").GetInt32());
+        var seen = Assert.Single(_seen);
+        Assert.Equal(("POST", $"/chat/sessions/{session}/messages"), (seen.Method, seen.Path));
+        Assert.Equal("Hello?", JsonDocument.Parse(seen.Body).RootElement.GetProperty("content").GetString());
+        Assert.Equal(user.ToString(), (await ValidateAsync(seen.Auth!)).Subject);
+    }
+
+    [Fact]
+    public async Task A_refusal_before_the_stream_starts_is_thrown_not_streamed()
+    {
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var ct = TestContext.Current.CancellationToken;
+
+        _respond = (_, _) => Results.Json(new { code = "ai_quota_exceeded", reset_at = "2030-01-02T00:00:00+00:00", retry_after = 60 }, statusCode: 429);
+        var quota = await Assert.ThrowsAsync<AiRejectedException>(() => ai.OpenChatAsync(Guid.NewGuid(), Guid.NewGuid(), "q", ct));
+        Assert.Equal(ProblemCode.AiQuotaExceeded, quota.Code);
+
+        _respond = (_, _) => Results.Json(new { code = "not_found" }, statusCode: 404);
+        var missing = await Assert.ThrowsAsync<AiRejectedException>(() => ai.OpenChatAsync(Guid.NewGuid(), Guid.NewGuid(), "q", ct));
+        Assert.Equal(ProblemCode.NotFound, missing.Code);
+
+        _respond = (_, _) => Results.StatusCode(503);
+        await Assert.ThrowsAsync<AiUnavailableException>(() => ai.OpenChatAsync(Guid.NewGuid(), Guid.NewGuid(), "q", ct));
+    }
+
+    [Fact]
+    public async Task A_stream_that_never_produces_its_first_event_ends_with_an_unavailable_error_event()
+    {
+        _respond = (_, _) => Results.Stream(async s =>
+        {
+            await s.FlushAsync();   // the headers go out, then nothing
+            await Task.Delay(3000);
+        }, "text/event-stream");
+        using var sp = Build(new() { ["ChatFirstEventSeconds"] = "0.3", ["Retries"] = "0" });
+
+        var events = await ReadAll(await sp.GetRequiredService<IAiClient>().OpenChatAsync(Guid.NewGuid(), Guid.NewGuid(), "q", TestContext.Current.CancellationToken));
+
+        var error = Assert.Single(events);
+        Assert.Equal("error", error.Name);
+        Assert.Equal("ai_unavailable", error.Data.GetProperty("code").GetString());
+    }
+
+    [Fact]
+    public async Task A_stream_that_stops_part_way_ends_with_the_events_it_had_and_then_an_error_when_it_stalls()
+    {
+        _respond = (_, _) => Results.Stream(async s =>
+        {
+            await s.WriteAsync(Encoding.UTF8.GetBytes("event: token\ndata: {\"text\":\"Part\"}\n\n"));
+            await s.FlushAsync();
+            await Task.Delay(3000);
+        }, "text/event-stream");
+        using var sp = Build(new() { ["ChatTotalSeconds"] = "0.5", ["Retries"] = "0" });
+
+        var events = await ReadAll(await sp.GetRequiredService<IAiClient>().OpenChatAsync(Guid.NewGuid(), Guid.NewGuid(), "q", TestContext.Current.CancellationToken));
+
+        Assert.Equal(["token", "error"], events.Select(e => e.Name));
+    }
+
+    [Fact]
+    public async Task Session_calls_use_the_right_paths_and_read_the_answers()
+    {
+        var sid = Guid.NewGuid();
+        var col = Guid.NewGuid();
+        object Session(string title) => new { id = sid, title, scope_collection_id = col, created_at = "2030-01-01T00:00:00+00:00", updated_at = "2030-01-01T00:00:00+00:00" };
+        _respond = (seen, _) => (seen.Method, seen.Path) switch
+        {
+            ("POST", "/chat/sessions") => Results.Json(Session("New chat"), statusCode: 201),
+            ("GET", "/chat/sessions") => Results.Json(new { items = new[] { Session("A") } }),
+            ("PATCH", _) => Results.Json(Session("Renamed")),
+            ("GET", _) => Results.Json(new
+            {
+                id = sid,
+                title = "A",
+                scope_collection_id = col,
+                created_at = "2030-01-01T00:00:00+00:00",
+                updated_at = "2030-01-01T00:00:00+00:00",
+                messages = new[] { new { id = Guid.NewGuid(), role = "assistant", content = "Hi [1]", citations = new[] { new { n = 1, resource_id = Guid.NewGuid(), title = "T", quote = "Q" } }, created_at = "2030-01-01T00:00:00+00:00" } },
+            }),
+            _ => Results.NoContent(),
+        };
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var user = Guid.NewGuid();
+        var ct = TestContext.Current.CancellationToken;
+
+        Assert.Equal((sid, col), ((await ai.CreateChatSessionAsync(user, col, ct)).Id, (await ai.ListChatSessionsAsync(user, ct)).Single().ScopeCollectionId!.Value));
+        Assert.Equal("Renamed", (await ai.RenameChatSessionAsync(user, sid, "Renamed", ct)).Title);
+        var detail = await ai.GetChatSessionAsync(user, sid, ct);
+        Assert.Equal(("Hi [1]", 1, "Q"), (detail.Messages[0].Content, detail.Messages[0].Citations[0].N, detail.Messages[0].Citations[0].Quote));
+        await ai.DeleteChatSessionAsync(user, sid, ct);
+
+        var calls = _seen.Select(s => (s.Method, s.Path)).ToList();
+        Assert.Equal([("POST", "/chat/sessions"), ("GET", "/chat/sessions"), ("PATCH", $"/chat/sessions/{sid}"), ("GET", $"/chat/sessions/{sid}"), ("DELETE", $"/chat/sessions/{sid}")], calls);
+        Assert.Equal(col, JsonDocument.Parse(_seen.First().Body).RootElement.GetProperty("scope_collection_id").GetGuid());
+    }
 }
