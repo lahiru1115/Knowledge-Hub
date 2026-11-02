@@ -927,8 +927,9 @@ keep proxies from closing the connection.
 Set by the Core API for API responses and by the static host (Vercel `vercel.json` headers) for
 the SPA:
 
-- `Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`
-  (`img-src https:` allows preview images and favicons from saved sites).
+- `Content-Security-Policy: default-src 'self'; script-src 'self' 'sha256-<theme script hash>'; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'`
+  (`img-src https:` allows preview images and favicons from saved sites; the one hash allows the
+  small inline script that applies the theme before React loads, Doc 03 §12.3).
 - `Strict-Transport-Security: max-age=31536000; includeSubDomains`
 - `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`,
   `Permissions-Policy` with unused features off.
