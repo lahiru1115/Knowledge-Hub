@@ -11,7 +11,7 @@ public class HealthTests(WebApplicationFactory<Program> factory) : IClassFixture
     [InlineData("/health/ready")]
     public async Task Health_endpoints_return_200(string path)
     {
-        var response = await factory.CreateClient().GetAsync(path);
+        var response = await factory.CreateClient().GetAsync(path, TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 }

@@ -30,8 +30,8 @@ jobs:
       - name: Build (warnings are errors)
         run: dotnet build --no-restore -c Release
       - name: Unit tests
-        run: dotnet test --no-build -c Release tests/KnowledgeHub.UnitTests
+        run: dotnet test --no-build -c Release --project tests/KnowledgeHub.UnitTests
       - name: Integration tests
-        run: dotnet test --no-build -c Release tests/KnowledgeHub.IntegrationTests
+        run: dotnet test --no-build -c Release --project tests/KnowledgeHub.IntegrationTests
   # Later: coverage gate on Domain and Application (NFR-MAIN-03) and an oasdiff check of the
   # generated OpenAPI document against contracts/openapi.yaml (Doc 02 §8.1).
