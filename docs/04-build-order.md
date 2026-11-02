@@ -30,9 +30,7 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 
 ## Stage 2 — Identity (Core API + web shell)
 
-**Status:** backend items 2.1 to 2.4 done (register, login, logout, refresh, `/me`, CSRF, lockout, rate limits, audit, `migrate-core`). Still open: 2.5 web shell, 2.6 `web.yml`, 2.7 Should items (password reset and change, profile update, account deletion).
-
-Everything else needs a signed-in user, so this comes first.
+**Status:** items 2.1 to 2.6 done: backend (register, login, logout, refresh, `/me`, CSRF, lockout, rate limits, audit, `migrate-core`) and the web shell (Vite + React app, generated API client, sign-in and register screens, silent refresh, route guard, `web.yml`). Still open: 2.7 Should items (password reset and change, profile update, account deletion), which also adds the "Forgot password?" link to sign-in.
 
 | # | Work | Requirements |
 |---|---|---|

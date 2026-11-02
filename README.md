@@ -13,3 +13,13 @@ Personal knowledge library with AI-assisted summaries, tagging, semantic search 
 | `plans/` | Planning documents |
 
 Local infrastructure: `cp .env.example .env && docker compose up`. Application services are added as they are built.
+
+## Web app
+
+```bash
+cd apps/web
+npm ci
+npm run dev        # http://localhost:5173, proxies /api to the Core API on :8080
+npm test           # unit and component tests
+npm run e2e        # browser tests; see apps/web/e2e/README.md
+```

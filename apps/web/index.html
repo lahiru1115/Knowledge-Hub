@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Knowledge Hub</title>
+    <meta name="description" content="Save, organise and learn from what you find online." />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Applies the saved theme before React loads, so there is no light-to-dark flash (Doc 03 §12.3).
+         The CSP allows exactly this script by its hash; if you edit it, update the hash in vercel.json. -->
+    <script>
+      try {
+        var t = localStorage.getItem('kh_theme')
+        var dark =
+          t === 'dark' ||
+          ((!t || t === 'system') && matchMedia('(prefers-color-scheme: dark)').matches)
+        if (dark) document.documentElement.classList.add('dark')
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
