@@ -1,0 +1,33 @@
+name: db
+on:
+  pull_request:
+    paths: ["infra/db/**", ".github/workflows/db.yml"]
+  push:
+    branches: [main]
+    paths: ["infra/db/**", ".github/workflows/db.yml"]
+permissions:
+  contents: read
+jobs:
+  role-isolation:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: knowledge_hub
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: "5432"
+      PGDATABASE: knowledge_hub
+    steps:
+      - uses: actions/checkout@v4
+      - name: Initialise roles and schemas
+        run: psql -v ON_ERROR_STOP=1 -U postgres -f infra/db/init.sql
+        env:
+          PGPASSWORD: postgres
+      - name: Check role isolation
+        run: infra/db/check-roles.sh
