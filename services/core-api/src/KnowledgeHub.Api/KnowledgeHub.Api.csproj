@@ -2,5 +2,7 @@
   <ItemGroup>
     <ProjectReference Include="../KnowledgeHub.Application/KnowledgeHub.Application.csproj" />
     <ProjectReference Include="../KnowledgeHub.Infrastructure/KnowledgeHub.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" />
+    <PackageReference Include="FluentValidation.DependencyInjectionExtensions" />
   </ItemGroup>
 </Project>

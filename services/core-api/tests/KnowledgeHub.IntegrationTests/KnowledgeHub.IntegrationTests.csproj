@@ -8,5 +8,7 @@
     <PackageReference Include="Microsoft.AspNetCore.Mvc.Testing" />
     <PackageReference Include="Testcontainers.PostgreSql" />
     <ProjectReference Include="../../src/KnowledgeHub.Api/KnowledgeHub.Api.csproj" />
+    <!-- The same script the real database is initialised with (schemas, roles, extensions). -->
+    <None Include="../../../../infra/db/init.sql" Link="init.sql" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

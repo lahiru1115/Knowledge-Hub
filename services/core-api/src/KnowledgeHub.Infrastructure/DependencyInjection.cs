@@ -1,15 +1,34 @@
-using KnowledgeHub.Application;
+using KnowledgeHub.Application.Common;
+using KnowledgeHub.Application.Identity;
+using KnowledgeHub.Infrastructure.Persistence;
+using KnowledgeHub.Infrastructure.Security;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace KnowledgeHub.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddInfrastructure(this IServiceCollection services)
+    public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
+        var connectionString = configuration.GetConnectionString("Core")
+            ?? throw new InvalidOperationException("ConnectionStrings:Core is not configured.");
+
+        services.AddDbContext<AppDbContext>(o => ConfigureDb(o, connectionString));
+        services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<AppDbContext>());
+
         services.AddSingleton<IClock, SystemClock>();
+        services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
+        services.AddSingleton<ICommonPasswords, CommonPasswords>();
+        services.AddSingleton<ITokenService, TokenService>();
         return services;
     }
+
+    public static void ConfigureDb(DbContextOptionsBuilder builder, string connectionString) =>
+        builder
+            .UseNpgsql(connectionString, npgsql => npgsql.MigrationsHistoryTable("__EFMigrationsHistory", AppDbContext.Schema))
+            .UseSnakeCaseNamingConvention();
 }
 
 internal sealed class SystemClock : IClock

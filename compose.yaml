@@ -1,5 +1,5 @@
-# Local stack (Doc 02 §10.1). Infrastructure services only for now: core-api, ai-service,
-# the migrate-* one-shots and web are added to this file as each Dockerfile lands.
+# Local stack (Doc 02 §10.1). Infrastructure plus migrate-core so far; core-api, ai-service, migrate-ai
+# and web are added to this file as each Dockerfile lands.
 name: knowledge-hub
 services:
   postgres:
@@ -16,6 +16,16 @@ services:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_SUPERUSER:-postgres} -d knowledge_hub"]
       interval: 5s
       retries: 10
+  migrate-core:
+    build:
+      context: ./services/core-api
+      target: migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      CORE_MIGRATOR_CONNECTION: Host=postgres;Database=knowledge_hub;Username=core_migrator;Password=core_migrator_dev
+    restart: "no"
   ollama:
     image: ollama/ollama:latest
     ports: ["11434:11434"]

@@ -17,9 +17,9 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 - Monorepo folders, documents in `docs/`, 11 ADRs in `docs/adr/`.
 - `contracts/openapi.yaml` (57 operations) and `schemathesis.toml`.
 - `compose.yaml` (infrastructure only), `infra/db/init.sql`, `.env.example`.
-- Core API solution skeleton (written but **not yet built**; see Stage 1).
+- Core API solution skeleton, built and tested (Stage 1).
 
-## Stage 1 — Make the skeleton real
+## Stage 1 — Make the skeleton real (done)
 
 | # | Work | Done when |
 |---|---|---|
@@ -29,6 +29,8 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 | 1.4 | `docker compose up` brings up Postgres with the `core` and `ai` schemas and roles | Roles can connect; `core_app` cannot read `ai` |
 
 ## Stage 2 — Identity (Core API + web shell)
+
+**Status:** backend items 2.1 to 2.4 done (register, login, logout, refresh, `/me`, CSRF, lockout, rate limits, audit, `migrate-core`). Still open: 2.5 web shell, 2.6 `web.yml`, 2.7 Should items (password reset and change, profile update, account deletion).
 
 Everything else needs a signed-in user, so this comes first.
 

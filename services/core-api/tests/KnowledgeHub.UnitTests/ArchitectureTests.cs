@@ -13,11 +13,11 @@ public class ArchitectureTests
 
     [Fact]
     public void Domain_depends_on_nothing_else_in_the_solution() =>
-        AssertNoDependency(typeof(Domain.ResourceType), Application, Infrastructure, Api);
+        AssertNoDependency(typeof(Domain.User), Application, Infrastructure, Api, "Microsoft.EntityFrameworkCore");
 
     [Fact]
     public void Application_does_not_depend_on_Infrastructure_or_Api() =>
-        AssertNoDependency(typeof(Application.IClock), Infrastructure, Api);
+        AssertNoDependency(typeof(Application.Common.IClock), Infrastructure, Api);
 
     [Fact]
     public void Infrastructure_does_not_depend_on_Api() =>

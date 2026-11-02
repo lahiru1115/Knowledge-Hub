@@ -549,6 +549,7 @@ erDiagram
     jsonb preferences
     uuid security_stamp "changes on disable or password change"
     int failed_login_count
+    timestamptz failed_login_window_started_at "start of the 15-minute failure window"
     timestamptz locked_until
     timestamptz last_login_at
     timestamptz created_at
@@ -732,7 +733,7 @@ mean the same everywhere (UUIDv7 key, owner, creation and last-change time in UT
 | role | text | `member` (default) or `admin` |
 | is_disabled | boolean | Default false; set by admins (FR-ADM-02) |
 | preferences | jsonb | `{ "theme": "system\|light\|dark", "ai_auto_summary": true, "ai_tag_suggestions": true, "onboarding_dismissed": false }` |
-| failed_login_count, locked_until | int, timestamptz | Lockout state (FR-AUTH-02) |
+| failed_login_count, failed_login_window_started_at, locked_until | int, timestamptz, timestamptz | Lockout state (FR-AUTH-02): failures are counted from the window start; 10 within 15 minutes lock the account |
 | security_stamp | uuid | Replaced when the user is disabled or changes or resets their password; access tokens carrying an old stamp are rejected within 60 seconds |
 
 **core.refresh_tokens / core.password_reset_tokens**

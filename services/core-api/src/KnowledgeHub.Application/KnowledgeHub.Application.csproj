@@ -2,5 +2,6 @@
   <ItemGroup>
     <ProjectReference Include="../KnowledgeHub.Domain/KnowledgeHub.Domain.csproj" />
     <PackageReference Include="FluentValidation" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" />
   </ItemGroup>
 </Project>
