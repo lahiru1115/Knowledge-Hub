@@ -258,6 +258,7 @@ paths:
           content:
             application/json: { schema: { $ref: '#/components/schemas/AiUsage' } }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '503': { $ref: '#/components/responses/Unavailable' }
 
   /collections:
     get:
@@ -819,8 +820,11 @@ paths:
             application/json:
               schema:
                 type: object
-                required: [items]
+                required: [items, ai_available]
                 properties:
+                  ai_available:
+                    type: boolean
+                    description: False when the AI service did not answer; `items` is then empty and saving is unaffected
                   items:
                     type: array
                     maxItems: 5

@@ -4,7 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from app import errors
-from app.api import health, index
+from app.api import ai, health, index
 from app.config import Settings, get_settings
 from app.db import make_engine
 from app.providers import build_providers
@@ -15,6 +15,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        app.state.settings = settings
         app.state.engine = make_engine(settings)
         app.state.providers = build_providers(settings)
         try:
@@ -27,4 +28,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     errors.install(app)
     app.include_router(health.router)
     app.include_router(index.router)
+    app.include_router(ai.router)
     return app

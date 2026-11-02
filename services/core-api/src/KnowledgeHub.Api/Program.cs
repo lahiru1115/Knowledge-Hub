@@ -47,6 +47,7 @@ builder.Services.AddScoped<CollectionService>();
 builder.Services.AddScoped<ResourceService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<MetadataPreviewService>();
+builder.Services.AddScoped<KnowledgeHub.Application.Ai.AiFeaturesService>();
 builder.Services.AddScoped<IOutbox, OutboxWriter>();
 builder.Services.AddScoped<IOutboxHandler, AiIndexHandler>();
 builder.Services.AddScoped<IOutboxHandler, MetadataJobHandler>();
@@ -116,6 +117,7 @@ app.MapGet("/health/ready", async (IAppDbContext db, HttpContext http, Cancellat
 var api = app.MapGroup("/api/v1");
 api.MapIdentity();
 api.MapLibrary();
+api.MapAi();
 
 app.Run();
 

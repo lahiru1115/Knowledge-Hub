@@ -11,7 +11,7 @@ async def live() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-async def ready(request: Request, response: Response) -> dict[str, str]:
+async def ready(request: Request, response: Response) -> dict[str, object]:
     """Ready when the database answers and the `ai` schema has been migrated."""
     try:
         async with request.app.state.engine.connect() as conn:
@@ -22,4 +22,9 @@ async def ready(request: Request, response: Response) -> dict[str, str]:
     if version is None:
         response.status_code = 503
         return {"status": "not_migrated"}
-    return {"status": "ok", "schema_version": str(version)}
+    return {
+        "status": "ok",
+        "schema_version": str(version),
+        "profile": request.app.state.providers.profile,
+        "chat_available": False,  # chat arrives in step 5.7
+    }

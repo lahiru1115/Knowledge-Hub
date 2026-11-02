@@ -49,5 +49,34 @@ public sealed class AiIndexHandler(IAppDbContext db, IAiClient ai) : IOutboxHand
             : null;
         await ai.IndexAsync(userId, resourceId,
             new AiIndexRequest(resource.Title, resource.Description, resource.Notes, resource.CollectionId, text), ct);
+
+        if (context.Type == OutboxEventTypes.ResourceContentChanged) await AutoSummarizeAsync(resource, ct);
+    }
+
+    /// <summary>
+    /// After new page text is indexed, writes a summary if the user has that turned on (FR-AI-03, FR-AI-12). It never
+    /// replaces a summary the user wrote or an AI one they may have kept, and the write is conditional so an edit
+    /// made while this ran wins. Running out of quota or text is not an error: there is just no summary.
+    /// </summary>
+    private async Task AutoSummarizeAsync(Resource resource, CancellationToken ct)
+    {
+        if (resource.SummarySource is not (SummarySource.None or SummarySource.Extracted)) return;
+        var prefs = await db.Users.AsNoTracking().Where(u => u.Id == resource.UserId).Select(u => u.Preferences).FirstOrDefaultAsync(ct);
+        if (prefs is not { AiAutoSummary: true }) return;
+
+        AiSummary summary;
+        try
+        {
+            summary = await ai.SummarizeAsync(resource.UserId, resource.Id, resource.Title, resource.Description, null, ct);
+        }
+        catch (AiRejectedException)
+        {
+            return;
+        }
+        var source = summary.Source == "ai" ? SummarySource.Ai : SummarySource.Extracted;
+        // No change to updated_at: a background job must not make the user's next edit look like a conflict.
+        await db.Resources
+            .Where(x => x.Id == resource.Id && (x.SummarySource == SummarySource.None || x.SummarySource == SummarySource.Extracted))
+            .ExecuteUpdateAsync(s => s.SetProperty(x => x.Summary, summary.Summary).SetProperty(x => x.SummarySource, source), ct);
     }
 }

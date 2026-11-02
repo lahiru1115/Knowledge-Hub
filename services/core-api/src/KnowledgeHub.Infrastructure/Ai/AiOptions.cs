@@ -15,6 +15,12 @@ public sealed class AiOptions
     /// <summary>Indexing embeds every chunk, so it gets longer than the interactive calls of Doc 02 §5.2.</summary>
     public int IndexTimeoutSeconds { get; set; } = 60;
     public int OtherTimeoutSeconds { get; set; } = 10;
+    public int SummaryTimeoutSeconds { get; set; } = 20;
+    public int TagTimeoutSeconds { get; set; } = 10;
+    public int StatusTimeoutSeconds { get; set; } = 2;
+    public int StatusCacheSeconds { get; set; } = 10;
+    /// <summary>Reported when the AI service cannot say (it is down): which profile this deployment is set up for.</summary>
+    public string Profile { get; set; } = "free";
     public int Retries { get; set; } = 2;
     public double RetryBaseDelaySeconds { get; set; } = 0.5;
     public int BreakAfterFailures { get; set; } = 5;

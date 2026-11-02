@@ -21,6 +21,38 @@ public sealed class RecordingAi : IAiClient
     public ConcurrentQueue<Guid> Purged { get; } = new();
     public Func<Exception?>? Failure { get; set; }
 
+    // The user-facing calls, scripted per test.
+    public ConcurrentQueue<(Guid User, Guid? Resource, string? Title, string? Description, string? Text)> Summarized { get; } = new();
+    public Func<AiSummary> SummaryAnswer { get; set; } = () => new AiSummary("A generated summary.", "extracted", "extractive-v1");
+    public ConcurrentQueue<(Guid User, Guid? Resource, string? Title, string? Text, IReadOnlyCollection<string> Existing)> TagCalls { get; } = new();
+    public Func<IReadOnlyList<AiTagSuggestion>> TagAnswer { get; set; } = () => [new("databases", true), new("pooling", false)];
+    public Func<AiUsageInfo> UsageAnswer { get; set; } = () => new(DateTimeOffset.UtcNow.Date.AddDays(1), [new("summarize", 2, 300), new("search", 0, null)]);
+    public Func<AiStatusInfo> StatusAnswer { get; set; } = () => new(true, "free", false);
+
+    public Task<AiSummary> SummarizeAsync(Guid userId, Guid? resourceId, string? title, string? description, string? text, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        Summarized.Enqueue((userId, resourceId, title, description, text));
+        return Task.FromResult(SummaryAnswer());
+    }
+
+    public Task<IReadOnlyList<AiTagSuggestion>> SuggestTagsAsync(
+        Guid userId, Guid? resourceId, string? title, string? description, string? text,
+        IReadOnlyCollection<string> existingTags, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        TagCalls.Enqueue((userId, resourceId, title, text, existingTags));
+        return Task.FromResult(TagAnswer());
+    }
+
+    public Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        return Task.FromResult(UsageAnswer());
+    }
+
+    public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => Task.FromResult(StatusAnswer());
+
     public Task IndexAsync(Guid userId, Guid resourceId, AiIndexRequest request, CancellationToken ct)
     {
         if (Failure?.Invoke() is { } e) throw e;

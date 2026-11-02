@@ -10,6 +10,7 @@ TITLES = {
     "forbidden": "You are not allowed to do that.",
     "validation_failed": "One or more fields are not valid.",
     "not_found": "Not found.",
+    "not_enough_content": "There is not enough text to summarise.",
     "ai_quota_exceeded": "Daily AI limit reached.",
     "internal_error": "Something went wrong.",
 }
@@ -33,8 +34,12 @@ def problem(request: Request, status: int, code: str, detail: str | None = None,
         "code": code,
         **ext,
     }
-    headers = {"WWW-Authenticate": "Bearer"} if status == 401 else None
-    return JSONResponse(body, status_code=status, media_type="application/problem+json", headers=headers)
+    headers: dict[str, str] = {}
+    if status == 401:
+        headers["WWW-Authenticate"] = "Bearer"
+    if "retry_after" in ext:
+        headers["Retry-After"] = str(ext["retry_after"])
+    return JSONResponse(body, status_code=status, media_type="application/problem+json", headers=headers or None)
 
 
 def install(app: FastAPI) -> None:

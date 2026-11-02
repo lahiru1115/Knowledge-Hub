@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Options;
 using Polly;
+using Polly.Timeout;
 
 namespace KnowledgeHub.Infrastructure.Ai;
 
@@ -20,6 +21,7 @@ public static class AiServiceRegistration
         services.AddOptions<AiOptions>().Bind(configuration.GetSection(AiOptions.Section));
         services.TryAddSingleton(TimeProvider.System);
         services.AddSingleton<ServiceTokenFactory>();
+        services.AddSingleton<AiStatusCache>();
 
         var options = configuration.GetSection(AiOptions.Section).Get<AiOptions>() ?? new AiOptions();
         if (!options.Enabled)
@@ -37,6 +39,9 @@ public static class AiServiceRegistration
                 if (o.Retries > 0)   // the strategy refuses zero attempts
                     builder.AddRetry(new HttpRetryStrategyOptions
                     {
+                        // Only calls that are safe to repeat (PUT, DELETE, GET), and only for real failures: a quota or
+                        // validation answer from the AI service is a reply, not something to retry.
+                        ShouldHandle = args => ValueTask.FromResult(IsFailure(args.Outcome) && IsRepeatable(args.Context)),
                         MaxRetryAttempts = o.Retries,
                         BackoffType = DelayBackoffType.Exponential,
                         UseJitter = true,
@@ -44,6 +49,8 @@ public static class AiServiceRegistration
                     });
                 builder.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
                 {
+                    // One user hitting their quota (429) must not open the circuit for everyone.
+                    ShouldHandle = args => ValueTask.FromResult(IsFailure(args.Outcome)),
                     FailureRatio = 1.0,
                     MinimumThroughput = o.BreakAfterFailures,
                     SamplingDuration = TimeSpan.FromSeconds(Math.Max(o.BreakSeconds, 1)),
@@ -52,4 +59,14 @@ public static class AiServiceRegistration
             });
         return services;
     }
+
+    private static bool IsFailure(Outcome<HttpResponseMessage> outcome) => outcome switch
+    {
+        { Exception: HttpRequestException or TimeoutRejectedException or TaskCanceledException } => true,
+        { Result: { } r } => (int)r.StatusCode >= 500 || r.StatusCode == System.Net.HttpStatusCode.RequestTimeout,
+        _ => false,
+    };
+
+    private static bool IsRepeatable(ResilienceContext context) =>
+        context.GetRequestMessage()?.Method != HttpMethod.Post;
 }

@@ -1,3 +1,4 @@
+import logging
 import math
 import re
 from collections.abc import Sequence
@@ -6,6 +7,7 @@ import yake
 
 from app.providers.base import Embedder
 
+log = logging.getLogger(__name__)
 MAX_SUGGESTIONS = 5
 MAX_TAG_LENGTH = 50  # same limit as the Core API (FR-TAG-01)
 TEXT_CHARS = 2000
@@ -70,5 +72,10 @@ class YakeTagger:
         tags = [t for t in (normalise_tag(e) for e in existing_tags) if t]
         if self._embedder is None or not tags:
             return set()
-        doc_vec, *tag_vecs = await self._embedder.embed_documents([document[: TEXT_CHARS + 500], *tags])
+        try:
+            doc_vec, *tag_vecs = await self._embedder.embed_documents([document[: TEXT_CHARS + 500], *tags])
+        except Exception:
+            # No model available (not downloaded yet, or out of memory): suggestions still work from the words alone.
+            log.warning("Embedding model unavailable; matching existing tags by words only", exc_info=True)
+            return set()
         return {t for t, v in zip(tags, tag_vecs, strict=True) if cosine(doc_vec, v) >= SIMILARITY_THRESHOLD}

@@ -234,4 +234,117 @@ public sealed class AiClientTests : IAsyncLifetime
         var e = Assert.Throws<InvalidOperationException>(() => Build(new() { ["JwtSecret"] = "too-short" }));
         Assert.Contains("32 bytes", e.Message, StringComparison.Ordinal);
     }
+
+    // ---------- the user-facing calls ----------
+
+    [Fact]
+    public async Task Summarise_sends_the_resource_and_reads_the_answer()
+    {
+        _respond = (_, _) => Results.Json(new { summary = "Short.", source = "extracted", model = "extractive-v1" });
+        using var sp = Build();
+        var user = Guid.NewGuid();
+        var resource = Guid.NewGuid();
+
+        var s = await sp.GetRequiredService<IAiClient>().SummarizeAsync(user, resource, "T", "D", null, TestContext.Current.CancellationToken);
+
+        Assert.Equal(new AiSummary("Short.", "extracted", "extractive-v1"), s);
+        var seen = Assert.Single(_seen);
+        Assert.Equal(("POST", "/summarize"), (seen.Method, seen.Path));
+        var body = JsonDocument.Parse(seen.Body).RootElement;
+        Assert.Equal(resource, body.GetProperty("resource_id").GetGuid());
+        Assert.Equal(user.ToString(), (await ValidateAsync(seen.Auth!)).Subject);
+    }
+
+    [Fact]
+    public async Task Tag_suggestions_send_the_existing_tags_and_read_the_items()
+    {
+        _respond = (_, _) => Results.Json(new { items = new[] { new { name = "pooling", existing = true }, new { name = "npgsql", existing = false } } });
+        using var sp = Build();
+        var items = await sp.GetRequiredService<IAiClient>().SuggestTagsAsync(Guid.NewGuid(), null, "T", null, "text", ["pooling", "db"], TestContext.Current.CancellationToken);
+        Assert.Equal([new AiTagSuggestion("pooling", true), new AiTagSuggestion("npgsql", false)], items);
+        Assert.Equal(["pooling", "db"], JsonDocument.Parse(_seen.Single().Body).RootElement.GetProperty("existing_tags").EnumerateArray().Select(e => e.GetString()));
+    }
+
+    [Fact]
+    public async Task Usage_is_read_with_null_limits()
+    {
+        _respond = (_, _) => Results.Json(new
+        {
+            reset_at = "2030-01-02T00:00:00+00:00",
+            items = new object[] { new { operation = "summarize", used = 3, limit = 300 }, new { operation = "search", used = 0, limit = (int?)null } },
+        });
+        using var sp = Build();
+        var u = await sp.GetRequiredService<IAiClient>().GetUsageAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);
+        Assert.Equal(new DateTimeOffset(2030, 1, 2, 0, 0, 0, TimeSpan.Zero), u.ResetAt);
+        Assert.Equal([new AiUsageItem("summarize", 3, 300), new AiUsageItem("search", 0, null)], u.Items);
+    }
+
+    [Fact]
+    public async Task The_ais_two_deliberate_refusals_become_rejections_and_are_not_retried()
+    {
+        _respond = (_, _) => Results.Json(new { code = "ai_quota_exceeded", reset_at = "2030-01-02T00:00:00+00:00", retry_after = 600 }, statusCode: 429);
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var quota = await Assert.ThrowsAsync<AiRejectedException>(() => ai.GetUsageAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+        Assert.Equal((ProblemCode.AiQuotaExceeded, 600), (quota.Code, quota.RetryAfterSeconds));
+        Assert.Equal(new DateTimeOffset(2030, 1, 2, 0, 0, 0, TimeSpan.Zero), quota.ResetAt);
+        Assert.Single(_seen);   // a GET, so it could be retried, but a 429 is an answer
+
+        _respond = (_, _) => Results.Json(new { code = "not_enough_content" }, statusCode: 422);
+        var thin = await Assert.ThrowsAsync<AiRejectedException>(() => ai.SummarizeAsync(Guid.NewGuid(), null, "T", null, null, TestContext.Current.CancellationToken));
+        Assert.Equal(ProblemCode.NotEnoughContent, thin.Code);
+    }
+
+    [Fact]
+    public async Task One_users_quota_answers_never_open_the_circuit_for_everyone()
+    {
+        _respond = (_, _) => Results.Json(new { code = "ai_quota_exceeded", retry_after = 60 }, statusCode: 429);
+        using var sp = Build(new() { ["Retries"] = "0", ["BreakAfterFailures"] = "5" });
+        var ai = sp.GetRequiredService<IAiClient>();
+        for (var i = 0; i < 12; i++)
+            await Assert.ThrowsAsync<AiRejectedException>(() => ai.GetUsageAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+
+        _respond = (_, _) => Results.Json(new { reset_at = "2030-01-02T00:00:00+00:00", items = Array.Empty<object>() });
+        await ai.GetUsageAsync(Guid.NewGuid(), TestContext.Current.CancellationToken);   // still reaches the service
+        Assert.Equal(13, _seen.Count);
+    }
+
+    [Fact]
+    public async Task A_post_is_never_repeated_even_when_the_service_fails_but_a_get_is()
+    {
+        _respond = (_, _) => Results.StatusCode(503);
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        await Assert.ThrowsAsync<AiUnavailableException>(() => ai.SummarizeAsync(Guid.NewGuid(), null, "T", null, null, TestContext.Current.CancellationToken));
+        Assert.Single(_seen);   // summarising may cost quota, so it is not repeated blindly
+
+        while (_seen.TryDequeue(out _)) { }
+        await Assert.ThrowsAsync<AiUnavailableException>(() => ai.GetUsageAsync(Guid.NewGuid(), TestContext.Current.CancellationToken));
+        Assert.Equal(3, _seen.Count);
+    }
+
+    [Fact]
+    public async Task Status_is_remembered_for_a_few_seconds_and_a_dead_service_is_just_unavailable()
+    {
+        _respond = (_, _) => Results.Json(new { status = "ok", profile = "claude", chat_available = true });
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var first = await ai.GetStatusAsync(TestContext.Current.CancellationToken);
+        await ai.GetStatusAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new AiStatusInfo(true, "claude", true), first);
+        Assert.Single(_seen);   // the second call came from the cache
+        Assert.True(string.IsNullOrEmpty(_seen.Single().Auth));   // the readiness check carries no token
+
+        using var down = Build(new() { ["BaseUrl"] = "http://127.0.0.1:1", ["Retries"] = "0", ["Profile"] = "claude" });
+        var status = await down.GetRequiredService<IAiClient>().GetStatusAsync(TestContext.Current.CancellationToken);
+        Assert.Equal(new AiStatusInfo(false, "claude", false), status);
+    }
+
+    [Fact]
+    public async Task A_service_that_says_it_is_not_ready_is_reported_unavailable()
+    {
+        _respond = (_, _) => Results.Json(new { status = "not_migrated" }, statusCode: 503);
+        using var sp = Build(new() { ["Retries"] = "0" });
+        Assert.False((await sp.GetRequiredService<IAiClient>().GetStatusAsync(TestContext.Current.CancellationToken)).Available);
+    }
 }

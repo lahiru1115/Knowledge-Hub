@@ -20,6 +20,25 @@ class Settings(BaseSettings):
     embedding_model: str = Field(default="BAAI/bge-small-en-v1.5", alias="EMBEDDING_MODEL")
     model_cache_dir: str | None = Field(default=None, alias="MODEL_CACHE_DIR")
 
+    # Daily per-user limits (Appendix C). Leave unset for the profile's defaults; set to 0 or more to override.
+    quota_summarize: int | None = Field(default=None, alias="QUOTA_SUMMARIZE", ge=0)
+    quota_suggest_tags: int | None = Field(default=None, alias="QUOTA_SUGGEST_TAGS", ge=0)
+    quota_search: int | None = Field(default=None, alias="QUOTA_SEARCH", ge=0)
+    quota_chat: int | None = Field(default=None, alias="QUOTA_CHAT", ge=0)
+
+    def quotas(self) -> dict[str, int | None]:
+        """Daily limit per quota-bearing operation. None means no limit (Claude profile has no search limit)."""
+        free = {"summarize": 300, "suggest_tags": 300, "search": 500, "chat": 100}
+        claude = {"summarize": 100, "suggest_tags": 200, "search": None, "chat": 30}
+        base: dict[str, int | None] = dict(free if self.ai_profile == "free" else claude)
+        overrides = {
+            "summarize": self.quota_summarize,
+            "suggest_tags": self.quota_suggest_tags,
+            "search": self.quota_search,
+            "chat": self.quota_chat,
+        }
+        return {op: overrides[op] if overrides[op] is not None else limit for op, limit in base.items()}
+
     @field_validator("service_jwt_secret")
     @classmethod
     def _long_enough(cls, v: str) -> str:

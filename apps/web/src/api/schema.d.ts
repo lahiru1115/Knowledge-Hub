@@ -1557,6 +1557,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            503: components["responses"]["Unavailable"];
             default: components["responses"]["UnexpectedError"];
         };
     };
@@ -2339,6 +2340,8 @@ export interface operations {
                 };
                 content: {
                     "application/json": {
+                        /** @description False when the AI service did not answer; `items` is then empty and saving is unaffected */
+                        ai_available: boolean;
                         items: {
                             name: components["schemas"]["TagName"];
                             existing: boolean;
