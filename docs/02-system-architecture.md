@@ -1109,7 +1109,7 @@ Knowledge-Hub/                   repository root
   compose.yaml                   local stack: Postgres + pgvector, migrations, core-api,
                                  ai-service, Ollama, Mailpit, Jaeger
   .env.example                   safe defaults, no secrets
-  plans/                         plans, including greenfield/ drafts
+  plans/                         planning documents (the greenfield plan)
   docs/                          final SRS, architecture and UI/UX docs
     adr/                         architecture decision records
   .github/workflows/             web, core-api, ai-service, contract, security, deploy

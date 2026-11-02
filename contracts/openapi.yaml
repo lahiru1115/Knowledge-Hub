@@ -1,0 +1,1540 @@
+openapi: 3.1.0
+info:
+  title: Knowledge Hub API
+  version: 1.0.0
+  description: |
+    Source of truth for the Core API (Doc 02 §8). Written before any endpoint is built.
+    Cookie auth: `kh_at` (access token) and `kh_rt` (refresh token), both HttpOnly.
+    State-changing requests need an `X-CSRF-Token` header equal to the `kh_csrf` cookie
+    (obtain it with `GET /auth/csrf`). Errors are `application/problem+json` (Doc 02 §8.4).
+servers:
+  - url: /api/v1
+tags:
+  - name: Identity
+  - name: Collections
+  - name: Resources
+  - name: Tags
+  - name: Views
+  - name: Insights
+  - name: AI
+  - name: Admin
+  - name: Health
+
+security:
+  - cookieAuth: []
+
+paths:
+  /auth/csrf:
+    get:
+      tags: [Identity]
+      operationId: getCsrf
+      summary: Set the CSRF cookie
+      security: []
+      responses:
+        '204': { description: "Cookie `kh_csrf` set" }
+  /auth/register:
+    post:
+      tags: [Identity]
+      operationId: register
+      summary: Register and sign in
+      security: []
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } }
+      responses:
+        '201':
+          description: Registered and signed in
+          headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/User' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/login:
+    post:
+      tags: [Identity]
+      operationId: login
+      summary: Sign in
+      security: []
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } }
+      responses:
+        '200':
+          description: Signed in
+          headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/User' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '423': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/logout:
+    post:
+      tags: [Identity]
+      operationId: logout
+      summary: Sign out
+      x-csrf: true
+      responses:
+        '204': { description: "Cookies cleared, refresh token revoked" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+  /auth/refresh:
+    post:
+      tags: [Identity]
+      operationId: refresh
+      summary: Rotate tokens
+      security: [{ refreshCookieAuth: [] }]
+      x-csrf: true
+      responses:
+        '204':
+          description: New cookies issued
+          headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+  /auth/password-reset:
+    post:
+      tags: [Identity]
+      operationId: requestPasswordReset
+      summary: Request a reset email (always 202)
+      security: []
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties: { email: { type: string, format: email } }
+      responses:
+        '202': { description: "Accepted; same response whether or not the account exists" }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+  /auth/password-reset/confirm:
+    post:
+      tags: [Identity]
+      operationId: confirmPasswordReset
+      summary: Set a new password with the token
+      security: []
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token, new_password]
+              properties:
+                token: { type: string }
+                new_password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '204': { description: "Password changed; all sessions revoked" }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+  /auth/oauth/{provider}:
+    get:
+      tags: [Identity]
+      operationId: startOAuth
+      summary: Start OAuth (Could)
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+      responses:
+        '302': { description: "Redirect to the provider" }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /auth/oauth/{provider}/callback:
+    get:
+      tags: [Identity]
+      operationId: finishOAuth
+      summary: Finish OAuth (Could); the `state` parameter is checked
+      security: []
+      parameters:
+        - { name: provider, in: path, required: true, schema: { type: string } }
+        - { name: code, in: query, required: true, schema: { type: string } }
+        - { name: state, in: query, required: true, schema: { type: string } }
+      responses:
+        '302':
+          description: Signed in; redirect to the app
+          headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
+        '400': { $ref: '#/components/responses/Problem' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /me:
+    get:
+      tags: [Identity]
+      operationId: getMe
+      summary: Current user and preferences
+      responses:
+        '200':
+          description: The user
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/User' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    patch:
+      tags: [Identity]
+      operationId: updateMe
+      summary: Display name, preferences
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/UpdateMeRequest' } }
+      responses:
+        '200':
+          description: Updated user
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/User' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+    delete:
+      tags: [Identity]
+      operationId: deleteMe
+      summary: Delete account (password in body)
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties: { password: { type: string } }
+      responses:
+        '204': { description: "Account and all data deleted" }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+  /me/password:
+    put:
+      tags: [Identity]
+      operationId: changePassword
+      summary: Change password
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string }
+                new_password: { type: string, minLength: 12, maxLength: 128 }
+      responses:
+        '204': { description: "Changed; other sessions revoked" }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Problem' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+  /me/ai-usage:
+    get:
+      tags: [AI]
+      operationId: getMyAiUsage
+      summary: Today's AI usage and limits
+      responses:
+        '200':
+          description: Usage per operation
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/AiUsage' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /collections:
+    get:
+      tags: [Collections]
+      operationId: listCollections
+      summary: All collections with resource_count, plus the Inbox count
+      responses:
+        '200':
+          description: Collections
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, inbox_count]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Collection' }
+                  inbox_count: { type: integer, minimum: 0 }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Collections]
+      operationId: createCollection
+      summary: Create
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/CollectionCreate' } }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Collection' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '409': { $ref: '#/components/responses/Conflict' }
+  /collections/order:
+    put:
+      tags: [Collections]
+      operationId: reorderCollections
+      summary: Save sidebar order (list of IDs)
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids]
+              properties:
+                ids:
+                  type: array
+                  items: { $ref: '#/components/schemas/Id' }
+      responses:
+        '204': { description: "Order saved" }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /collections/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Collections]
+      operationId: getCollection
+      summary: One collection
+      responses:
+        '200':
+          description: The collection
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Collection' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Collections]
+      operationId: updateCollection
+      summary: Edit, pin
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/CollectionUpdate' } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Collection' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Collections]
+      operationId: deleteCollection
+      summary: Delete, with the user's choice for its resources
+      x-csrf: true
+      parameters:
+        - name: resources
+          in: query
+          required: true
+          schema: { type: string, enum: [delete, move] }
+        - name: target_collection_id
+          in: query
+          description: Target for `move`; empty means Inbox
+          schema: { $ref: '#/components/schemas/Id' }
+      responses:
+        '204': { description: "Deleted" }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /resources:
+    get:
+      tags: [Resources]
+      operationId: listResources
+      summary: List, keyword search, filter, sort, paginate
+      parameters:
+        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - name: type
+          in: query
+          style: form
+          explode: true
+          schema: { type: array, items: { $ref: '#/components/schemas/ResourceType' } }
+        - name: tag
+          in: query
+          description: Repeatable; all must match
+          style: form
+          explode: true
+          schema: { type: array, items: { type: string } }
+        - name: collection_id
+          in: query
+          description: A collection ID, or the literal `inbox`
+          schema: { type: string }
+        - { name: favourite, in: query, schema: { type: boolean } }
+        - { name: archived, in: query, schema: { type: boolean } }
+        - { name: created_from, in: query, schema: { type: string, format: date-time } }
+        - { name: created_to, in: query, schema: { type: string, format: date-time } }
+        - name: sort
+          in: query
+          schema: { type: string, enum: [relevance, newest, oldest, title, updated] }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of resources
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ResourcePage' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Resources]
+      operationId: createResource
+      summary: Save
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/ResourceCreate' } }
+      responses:
+        '201':
+          description: Saved with `metadata_status = pending`
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/check-url:
+    get:
+      tags: [Resources]
+      operationId: checkResourceUrl
+      summary: Duplicate check
+      parameters:
+        - { name: url, in: query, required: true, schema: { type: string, maxLength: 2048 } }
+      responses:
+        '200':
+          description: Existing resources with the same normalised URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [duplicates]
+                properties:
+                  duplicates:
+                    type: array
+                    items: { $ref: '#/components/schemas/Resource' }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /resources/bulk:
+    post:
+      tags: [Resources]
+      operationId: bulkResources
+      summary: Apply one action to up to 100 resources, all or none
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/BulkRequest' } }
+      responses:
+        '200':
+          description: Number of resources changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [changed]
+                properties: { changed: { type: integer, minimum: 0 } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [Resources]
+      operationId: getResource
+      summary: One resource
+      responses:
+        '200':
+          description: The resource
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [Resources]
+      operationId: updateResource
+      summary: Edit fields, tags, favourite, archive, summary
+      description: JSON merge semantics. Absent fields are unchanged; `null` clears a nullable field.
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/ResourceUpdate' } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Resources]
+      operationId: deleteResource
+      summary: Soft delete (undo within 7 days)
+      x-csrf: true
+      responses:
+        '204': { description: "Deleted" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/{id}/restore:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Resources]
+      operationId: restoreResource
+      summary: Undo delete
+      x-csrf: true
+      responses:
+        '200':
+          description: Restored
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/{id}/metadata/refresh:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Resources]
+      operationId: refreshResourceMetadata
+      summary: Retry metadata extraction
+      x-csrf: true
+      responses:
+        '202':
+          description: Extraction queued
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /metadata/preview:
+    post:
+      tags: [Resources]
+      operationId: previewMetadata
+      summary: Preview a URL without saving
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties: { url: { type: string, maxLength: 2048 } }
+      responses:
+        '200':
+          description: What could be fetched (possibly partial)
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/MetadataPreview' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+
+  /tags:
+    get:
+      tags: [Tags]
+      operationId: listTags
+      summary: Tags with usage counts
+      responses:
+        '200':
+          description: Tags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tag' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /tags/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    patch:
+      tags: [Tags]
+      operationId: renameTag
+      summary: Rename
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties: { name: { $ref: '#/components/schemas/TagName' } }
+      responses:
+        '200':
+          description: Renamed
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Tag' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409': { $ref: '#/components/responses/Conflict' }
+    delete:
+      tags: [Tags]
+      operationId: deleteTag
+      summary: Delete (resources stay)
+      x-csrf: true
+      responses:
+        '204': { description: "Deleted" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /tags/{id}/merge:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [Tags]
+      operationId: mergeTag
+      summary: Merge into target_tag_id
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [target_tag_id]
+              properties: { target_tag_id: { $ref: '#/components/schemas/Id' } }
+      responses:
+        '200':
+          description: The surviving tag
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Tag' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /views:
+    get:
+      tags: [Views]
+      operationId: listViews
+      summary: Saved views (Could)
+      responses:
+        '200':
+          description: Views
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/SavedView' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [Views]
+      operationId: createView
+      summary: Create a saved view (Could)
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/SavedViewInput' } }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/SavedView' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+  /views/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    patch:
+      tags: [Views]
+      operationId: updateView
+      summary: Update a saved view (Could)
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json: { schema: { $ref: '#/components/schemas/SavedViewInput' } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/SavedView' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Views]
+      operationId: deleteView
+      summary: Delete a saved view (Could)
+      x-csrf: true
+      responses:
+        '204': { description: "Deleted" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /dashboard:
+    get:
+      tags: [Insights]
+      operationId: getDashboard
+      summary: Totals, type breakdown, recent items, weekly activity, onboarding steps
+      responses:
+        '200':
+          description: Dashboard
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Dashboard' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /export:
+    get:
+      tags: [Insights]
+      operationId: exportLibrary
+      summary: Download all data
+      parameters:
+        - name: format
+          in: query
+          required: true
+          schema: { type: string, enum: [json, csv] }
+      responses:
+        '200':
+          description: The export file (attachment)
+          content:
+            application/json: { schema: { type: object, additionalProperties: true } }
+            text/csv: { schema: { type: string } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+
+  /ai/status:
+    get:
+      tags: [AI]
+      operationId: getAiStatus
+      summary: AI availability and profile
+      responses:
+        '200':
+          description: Status
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/AiStatus' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+  /ai/tag-suggestions:
+    post:
+      tags: [AI]
+      operationId: suggestTags
+      summary: Suggestions for a URL or a saved resource
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: Exactly one of `url` or `resource_id`
+              properties:
+                url: { type: string, maxLength: 2048 }
+                resource_id: { $ref: '#/components/schemas/Id' }
+      responses:
+        '200':
+          description: Up to 5 suggestions, existing tags first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 5
+                    items:
+                      type: object
+                      required: [name, existing]
+                      properties:
+                        name: { $ref: '#/components/schemas/TagName' }
+                        existing: { type: boolean }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /resources/{id}/summary:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [AI]
+      operationId: generateSummary
+      summary: Generate or regenerate
+      x-csrf: true
+      responses:
+        '200':
+          description: The updated resource
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/Resource' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/Problem' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+    delete:
+      tags: [AI]
+      operationId: deleteSummary
+      summary: Remove summary
+      x-csrf: true
+      responses:
+        '204': { description: "Summary removed" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /resources/{id}/related:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [AI]
+      operationId: listRelatedResources
+      summary: Up to 5 related resources
+      responses:
+        '200':
+          description: Related resources
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    maxItems: 5
+                    items: { $ref: '#/components/schemas/Resource' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+  /search/semantic:
+    get:
+      tags: [AI]
+      operationId: searchSemantic
+      summary: Semantic search (page is always 1)
+      parameters:
+        - { name: q, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 500 } }
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: One result per resource, with a snippet
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/SemanticSearchPage' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /chat/sessions:
+    get:
+      tags: [AI]
+      operationId: listChatSessions
+      summary: List chats
+      responses:
+        '200':
+          description: Chats, most recently updated first
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/ChatSession' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+    post:
+      tags: [AI]
+      operationId: createChatSession
+      summary: Start a chat
+      x-csrf: true
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                scope_collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ChatSession' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /chat/sessions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    get:
+      tags: [AI]
+      operationId: getChatSession
+      summary: Chat with messages
+      responses:
+        '200':
+          description: The chat
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ChatSessionDetail' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    patch:
+      tags: [AI]
+      operationId: renameChatSession
+      summary: Rename
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties: { title: { type: string, minLength: 1, maxLength: 200 } }
+      responses:
+        '200':
+          description: Renamed
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/ChatSession' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [AI]
+      operationId: deleteChatSession
+      summary: Delete
+      x-csrf: true
+      responses:
+        '204': { description: "Deleted" }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /chat/sessions/{id}/messages:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    post:
+      tags: [AI]
+      operationId: askChat
+      summary: Ask; responds with Server-Sent Events
+      description: |
+        Events (Doc 02 §8.5): `token` `{text}`, `citations` `{items:[{n,resource_id,title,url,quote}]}`,
+        then `done` `{message_id, usage:{tokens_in,tokens_out}}`, or `error` `{code}` instead of `done`.
+        Sends `Cache-Control: no-cache`, `X-Accel-Buffering: no` and a comment line every 15 seconds.
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [content]
+              properties: { content: { type: string, minLength: 1, maxLength: 4000 } }
+      responses:
+        '200':
+          description: Event stream
+          content:
+            text/event-stream: { schema: { type: string } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/CsrfFailed' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/RateLimited' }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+  /admin/users:
+    get:
+      tags: [Admin]
+      operationId: adminListUsers
+      summary: User list
+      security: [{ cookieAuth: [] }]
+      parameters:
+        - { name: q, in: query, description: Email search, schema: { type: string } }
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/PageSize'
+      responses:
+        '200':
+          description: A page of users
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/AdminUserPage' } }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+  /admin/users/{id}:
+    parameters:
+      - $ref: '#/components/parameters/IdPath'
+    patch:
+      tags: [Admin]
+      operationId: adminUpdateUser
+      summary: Disable or enable
+      x-csrf: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [is_disabled]
+              properties: { is_disabled: { type: boolean } }
+      responses:
+        '200':
+          description: Updated
+          content:
+            application/json: { schema: { $ref: '#/components/schemas/AdminUser' } }
+        '400': { $ref: '#/components/responses/ValidationFailed' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /admin/ai-usage:
+    get:
+      tags: [Admin]
+      operationId: adminAiUsage
+      summary: AI usage and cost, per day for the last 30 days
+      responses:
+        '200':
+          description: Usage rows
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [date, operation, calls, tokens_in, tokens_out, cost_usd]
+                      properties:
+                        date: { type: string, format: date }
+                        user_id: { $ref: '#/components/schemas/Id' }
+                        operation: { $ref: '#/components/schemas/AiOperation' }
+                        calls: { type: integer }
+                        tokens_in: { type: integer }
+                        tokens_out: { type: integer }
+                        cost_usd: { type: number }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /health/live:
+    get:
+      tags: [Health]
+      operationId: healthLive
+      summary: Process is up (served at /health/live, outside /api/v1)
+      security: []
+      servers: [{ url: / }]
+      responses:
+        '200': { description: "Alive" }
+  /health/ready:
+    get:
+      tags: [Health]
+      operationId: healthReady
+      summary: Database reachable (served at /health/ready, outside /api/v1)
+      description: Reports AI service status in the body without failing readiness.
+      security: []
+      servers: [{ url: / }]
+      responses:
+        '200': { description: "Ready" }
+        '503': { $ref: '#/components/responses/Unavailable' }
+
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: kh_at
+    refreshCookieAuth:
+      type: apiKey
+      in: cookie
+      name: kh_rt
+
+  headers:
+    SetCookie:
+      description: HttpOnly, Secure, SameSite=Lax cookies `kh_at` and `kh_rt`
+      schema: { type: string }
+
+  parameters:
+    IdPath:
+      name: id
+      in: path
+      required: true
+      schema: { $ref: '#/components/schemas/Id' }
+    Page:
+      name: page
+      in: query
+      schema: { type: integer, minimum: 1, default: 1 }
+    PageSize:
+      name: page_size
+      in: query
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+
+  responses:
+    Problem:
+      description: Problem Details
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    ValidationFailed:
+      description: "400 validation_failed (or invalid_token)"
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    Unauthenticated:
+      description: 401 unauthenticated
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    CsrfFailed:
+      description: 403 csrf_failed
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    Forbidden:
+      description: 403 forbidden or account_disabled
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    NotFound:
+      description: 404 not_found (unknown ID or another user's ID)
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    Conflict:
+      description: 409 email_taken, collection_name_taken, tag_name_taken or edit_conflict
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    RateLimited:
+      description: 429 rate_limited or ai_quota_exceeded
+      headers:
+        Retry-After: { schema: { type: integer } }
+        RateLimit-Policy: { schema: { type: string } }
+        RateLimit: { schema: { type: string } }
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+    Unavailable:
+      description: 503 ai_unavailable or service_unavailable
+      headers:
+        Retry-After: { schema: { type: integer } }
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
+
+  schemas:
+    Id:
+      type: string
+      format: uuid
+      description: UUIDv7
+    TagName:
+      type: string
+      minLength: 1
+      maxLength: 50
+      pattern: '^[a-z0-9 _.#+-]+$'
+    ResourceType:
+      type: string
+      enum: [article, video, pdf, course, repo, website, other]
+    SummarySource:
+      type: string
+      enum: [none, extracted, ai, user]
+    MetadataStatus:
+      type: string
+      enum: [pending, ready, failed]
+    AiOperation:
+      type: string
+      enum: [summarize, suggest_tags, embed, search, chat]
+
+    ProblemCode:
+      type: string
+      enum:
+        - validation_failed
+        - invalid_token
+        - unauthenticated
+        - invalid_credentials
+        - csrf_failed
+        - forbidden
+        - account_disabled
+        - not_found
+        - email_taken
+        - collection_name_taken
+        - tag_name_taken
+        - edit_conflict
+        - not_enough_content
+        - account_locked
+        - rate_limited
+        - ai_quota_exceeded
+        - internal_error
+        - ai_unavailable
+        - service_unavailable
+    Problem:
+      type: object
+      required: [type, title, status, code]
+      properties:
+        type: { type: string, example: /problems/validation_failed }
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        instance: { type: string }
+        code: { $ref: '#/components/schemas/ProblemCode' }
+        trace_id: { type: string }
+        errors:
+          type: object
+          additionalProperties:
+            type: array
+            items: { type: string }
+        retry_after: { type: integer, description: Seconds (account_locked) }
+        reset_at: { type: string, format: date-time, description: ai_quota_exceeded }
+
+    Preferences:
+      type: object
+      properties:
+        theme: { type: string, enum: [system, light, dark] }
+        ai_auto_summary: { type: boolean }
+        ai_tag_suggestions: { type: boolean }
+        onboarding_dismissed: { type: boolean }
+    User:
+      type: object
+      required: [id, email, display_name, role, preferences, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        email: { type: string, format: email }
+        display_name: { type: string, minLength: 1, maxLength: 60 }
+        role: { type: string, enum: [member, admin] }
+        preferences: { $ref: '#/components/schemas/Preferences' }
+        created_at: { type: string, format: date-time }
+    RegisterRequest:
+      type: object
+      required: [email, password, display_name]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string, minLength: 12, maxLength: 128 }
+        display_name: { type: string, minLength: 1, maxLength: 60 }
+    LoginRequest:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+    UpdateMeRequest:
+      type: object
+      properties:
+        display_name: { type: string, minLength: 1, maxLength: 60 }
+        preferences: { $ref: '#/components/schemas/Preferences' }
+
+    Collection:
+      type: object
+      required: [id, name, is_pinned, position, resource_count, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        color: { type: [string, 'null'], description: Design-system palette name }
+        icon: { type: [string, 'null'], description: One emoji }
+        is_pinned: { type: boolean }
+        position: { type: integer }
+        resource_count: { type: integer, minimum: 0 }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    CollectionCreate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        color: { type: [string, 'null'] }
+        icon: { type: [string, 'null'] }
+    CollectionUpdate:
+      type: object
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        description: { type: [string, 'null'], maxLength: 500 }
+        color: { type: [string, 'null'] }
+        icon: { type: [string, 'null'] }
+        is_pinned: { type: boolean }
+        expected_updated_at: { type: string, format: date-time }
+
+    Tag:
+      type: object
+      required: [id, name, resource_count]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        name: { $ref: '#/components/schemas/TagName' }
+        resource_count: { type: integer, minimum: 0 }
+    Resource:
+      type: object
+      required:
+        - id
+        - url
+        - type
+        - tags
+        - summary_source
+        - is_favourite
+        - is_archived
+        - metadata_status
+        - created_at
+        - updated_at
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        url: { type: string, maxLength: 2048 }
+        title: { type: [string, 'null'], maxLength: 300 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 100000, description: Markdown }
+        type: { $ref: '#/components/schemas/ResourceType' }
+        collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }], description: Null means Inbox }
+        tags:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/TagName' }
+        favicon_url: { type: [string, 'null'], maxLength: 2048 }
+        image_url: { type: [string, 'null'], maxLength: 2048 }
+        site_name: { type: [string, 'null'] }
+        summary: { type: [string, 'null'], maxLength: 2000 }
+        summary_source: { $ref: '#/components/schemas/SummarySource' }
+        is_favourite: { type: boolean }
+        is_archived: { type: boolean }
+        metadata_status: { $ref: '#/components/schemas/MetadataStatus' }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ResourceCreate:
+      type: object
+      required: [url]
+      properties:
+        url: { type: string, maxLength: 2048, pattern: '^https?://' }
+        title: { type: string, maxLength: 300 }
+        description: { type: string, maxLength: 2000 }
+        notes: { type: string, maxLength: 100000 }
+        type: { $ref: '#/components/schemas/ResourceType' }
+        collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        tags:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/TagName' }
+    ResourceUpdate:
+      type: object
+      properties:
+        url: { type: string, maxLength: 2048, pattern: '^https?://' }
+        title: { type: [string, 'null'], maxLength: 300 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 100000 }
+        type: { $ref: '#/components/schemas/ResourceType' }
+        collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        tags:
+          type: array
+          maxItems: 20
+          items: { $ref: '#/components/schemas/TagName' }
+        is_favourite: { type: boolean }
+        is_archived: { type: boolean }
+        summary: { type: [string, 'null'], maxLength: 2000, description: Setting it marks the source `user` }
+        expected_updated_at: { type: string, format: date-time }
+    ResourcePage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Resource' }
+        page: { type: integer, minimum: 1 }
+        page_size: { type: integer, minimum: 1, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+    BulkRequest:
+      type: object
+      required: [action, ids]
+      properties:
+        action: { type: string, enum: [move, add_tags, remove_tags, delete, restore] }
+        ids:
+          type: array
+          minItems: 1
+          maxItems: 100
+          items: { $ref: '#/components/schemas/Id' }
+        collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }], description: For `move`; null is Inbox }
+        tags:
+          type: array
+          items: { $ref: '#/components/schemas/TagName' }
+          description: For `add_tags` and `remove_tags`
+    MetadataPreview:
+      type: object
+      properties:
+        title: { type: [string, 'null'] }
+        description: { type: [string, 'null'] }
+        image_url: { type: [string, 'null'] }
+        favicon_url: { type: [string, 'null'] }
+        type: { $ref: '#/components/schemas/ResourceType' }
+
+    SavedViewInput:
+      type: object
+      required: [name, query]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        query:
+          type: object
+          description: The `GET /resources` query parameters to restore
+          additionalProperties: true
+    SavedView:
+      allOf:
+        - $ref: '#/components/schemas/SavedViewInput'
+        - type: object
+          required: [id]
+          properties:
+            id: { $ref: '#/components/schemas/Id' }
+
+    Dashboard:
+      type: object
+      required: [totals, by_type, recent, weekly_activity, onboarding]
+      properties:
+        totals:
+          type: object
+          required: [resources, collections, tags, favourites]
+          properties:
+            resources: { type: integer }
+            collections: { type: integer }
+            tags: { type: integer }
+            favourites: { type: integer }
+        by_type:
+          type: object
+          description: One count per resource type; counts sum to totals.resources
+          additionalProperties: { type: integer }
+        recent:
+          type: array
+          maxItems: 5
+          items: { $ref: '#/components/schemas/Resource' }
+        weekly_activity:
+          type: array
+          maxItems: 12
+          items:
+            type: object
+            required: [week_start, count]
+            properties:
+              week_start: { type: string, format: date }
+              count: { type: integer }
+        onboarding:
+          type: object
+          required: [dismissed, steps]
+          properties:
+            dismissed: { type: boolean }
+            steps:
+              type: object
+              required: [first_resource, first_collection, tried_search, asked_question]
+              properties:
+                first_resource: { type: boolean }
+                first_collection: { type: boolean }
+                tried_search: { type: boolean }
+                asked_question: { type: boolean }
+
+    AiStatus:
+      type: object
+      required: [available, profile]
+      properties:
+        available: { type: boolean }
+        profile: { type: string, enum: [free, claude] }
+        chat_available: { type: boolean }
+    AiUsage:
+      type: object
+      required: [items, reset_at]
+      properties:
+        reset_at: { type: string, format: date-time }
+        items:
+          type: array
+          items:
+            type: object
+            required: [operation, used, limit]
+            properties:
+              operation: { $ref: '#/components/schemas/AiOperation' }
+              used: { type: integer }
+              limit: { type: integer }
+    SemanticSearchPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required: [resource, snippet, score]
+            properties:
+              resource: { $ref: '#/components/schemas/Resource' }
+              snippet: { type: string }
+              score: { type: number }
+        page: { type: integer, const: 1 }
+        page_size: { type: integer }
+        total: { type: integer }
+        fallback: { type: boolean, description: True when keyword search replaced semantic search (AI unavailable) }
+
+    Citation:
+      type: object
+      required: [n, resource_id, title, url]
+      properties:
+        n: { type: integer, minimum: 1 }
+        resource_id: { $ref: '#/components/schemas/Id' }
+        title: { type: string }
+        url: { type: string }
+        quote: { type: string }
+    ChatSession:
+      type: object
+      required: [id, title, created_at, updated_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        title: { type: string }
+        scope_collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ChatMessage:
+      type: object
+      required: [id, role, content, created_at]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        role: { type: string, enum: [user, assistant] }
+        content: { type: string }
+        citations:
+          type: array
+          items: { $ref: '#/components/schemas/Citation' }
+        created_at: { type: string, format: date-time }
+    ChatSessionDetail:
+      allOf:
+        - $ref: '#/components/schemas/ChatSession'
+        - type: object
+          required: [messages]
+          properties:
+            messages:
+              type: array
+              items: { $ref: '#/components/schemas/ChatMessage' }
+
+    AdminUser:
+      type: object
+      required: [id, email, display_name, role, created_at, resource_count, is_disabled]
+      properties:
+        id: { $ref: '#/components/schemas/Id' }
+        email: { type: string, format: email }
+        display_name: { type: string }
+        role: { type: string, enum: [member, admin] }
+        created_at: { type: string, format: date-time }
+        last_sign_in_at: { type: [string, 'null'], format: date-time }
+        resource_count: { type: integer }
+        is_disabled: { type: boolean }
+    AdminUserPage:
+      type: object
+      required: [items, page, page_size, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AdminUser' }
+        page: { type: integer }
+        page_size: { type: integer }
+        total: { type: integer }

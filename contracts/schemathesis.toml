@@ -1,0 +1,10 @@
+# Schemathesis settings for contract tests (Doc 02 §8.1).
+# Run in CI against the composed stack with a seeded test user (NFR-MAIN-02).
+[[project]]
+title = "Knowledge Hub Core API"
+base-url = "http://localhost:8080/api/v1"
+workers = 2
+
+[generation]
+modes = ["positive", "negative"]
+max-examples = 50
