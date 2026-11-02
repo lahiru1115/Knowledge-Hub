@@ -100,13 +100,13 @@ describe('appearance', () => {
     renderApp('/settings/appearance')
     const u = userEvent.setup()
 
-    await u.click(await screen.findByLabelText('Dark'))
+    await u.click(await screen.findByRole('radio', { name: 'Dark' }))
 
     expect(document.documentElement).toHaveClass('dark')
     await waitFor(() => {
       expect(patches).toEqual([{ preferences: { theme: 'dark' } }])
     })
-    expect(screen.getByLabelText('Dark')).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'Dark' })).toBeChecked()
     expect(localStorage.getItem('kh_theme')).toBe('dark')
   })
 
@@ -116,11 +116,11 @@ describe('appearance', () => {
     renderApp('/settings/appearance')
     const u = userEvent.setup()
 
-    await u.click(await screen.findByLabelText('Dark'))
+    await u.click(await screen.findByRole('radio', { name: 'Dark' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Something went wrong on our side.')
     expect(document.documentElement).not.toHaveClass('dark')
-    expect(screen.getByLabelText('System')).toBeChecked()
+    expect(screen.getByRole('radio', { name: 'System' })).toBeChecked()
   })
 
   it('applies the theme saved on the account when the app loads (it follows the user across devices)', async () => {

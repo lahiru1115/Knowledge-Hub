@@ -17,9 +17,9 @@ export function SettingsLayout() {
             <li key={s.to}>
               <Link
                 to={s.to}
-                className="block rounded-md px-3 py-2 text-sm hover:bg-bg-subtle"
+                className="block rounded-md px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground"
                 activeProps={{
-                  className: 'bg-accent-subtle font-medium text-accent',
+                  className: 'bg-accent font-medium text-accent-foreground',
                   'aria-current': 'page',
                 }}
               >

@@ -9,6 +9,7 @@ export default tseslint.config(
     ignores: [
       'eslint.config.js',
       'scripts',
+      'src/components/ui', // shadcn/ui sources, kept as upstream ships them
       'dist',
       'src/api/schema.d.ts',
       'src/routeTree.gen.ts',

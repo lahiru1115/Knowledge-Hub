@@ -5,8 +5,9 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { api, unwrap } from '@/api/client'
-import { Button } from '@/components/ui/button'
-import { Field, PasswordField } from '@/components/ui/field'
+import { FormAlert } from '@/components/FormAlert'
+import { LoadingButton } from '@/components/loading-button'
+import { FormField, PasswordField } from '@/components/form-field'
 import { safeNext } from '@/lib/safeNext'
 import { applyTheme } from '@/lib/theme'
 import { AuthLayout } from './AuthLayout'
@@ -45,12 +46,8 @@ export function LoginPage() {
   return (
     <AuthLayout title="Sign in">
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
-        {formError && (
-          <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
-            {formError}
-          </p>
-        )}
-        <Field
+        {formError && <FormAlert>{formError}</FormAlert>}
+        <FormField
           label="Email"
           type="email"
           autoComplete="email"
@@ -64,20 +61,23 @@ export function LoginPage() {
           {...register('password')}
         />
         <p className="text-right text-sm">
-          <Link to="/forgot-password" className="font-medium text-accent underline">
+          <Link
+            to="/forgot-password"
+            className="font-medium text-primary underline underline-offset-4"
+          >
             Forgot password?
           </Link>
         </p>
-        <Button type="submit" loading={isSubmitting} className="w-full">
+        <LoadingButton type="submit" loading={isSubmitting} className="w-full">
           Sign in
-        </Button>
+        </LoadingButton>
       </form>
-      <p className="text-center text-sm text-text-muted">
+      <p className="text-center text-sm text-muted-foreground">
         New here?{' '}
         <Link
           to="/register"
           search={next ? { next } : {}}
-          className="font-medium text-accent underline"
+          className="font-medium text-primary underline underline-offset-4"
         >
           Create an account
         </Link>

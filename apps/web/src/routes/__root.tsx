@@ -8,8 +8,8 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
   notFoundComponent: () => (
     <div className="mx-auto mt-16 max-w-md space-y-3 px-4 text-center">
       <h1 className="text-xl font-semibold">Page not found</h1>
-      <p className="text-text-muted">This page doesn&apos;t exist.</p>
-      <Link to="/" className="font-medium text-accent underline">
+      <p className="text-muted-foreground">This page doesn&apos;t exist.</p>
+      <Link to="/" className="font-medium text-primary underline underline-offset-4">
         Go to home
       </Link>
     </div>

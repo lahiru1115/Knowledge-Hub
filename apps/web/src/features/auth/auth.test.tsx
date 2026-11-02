@@ -280,7 +280,10 @@ describe('register', () => {
 
     expect(await screen.findByText('This password is too common.')).toBeInTheDocument()
     expect(screen.getByLabelText('Password')).toHaveAttribute('aria-invalid', 'true')
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    // The only alert is the field's own message, not a separate form-level banner.
+    expect(screen.getAllByRole('alert').map((a) => a.textContent)).toEqual([
+      'This password is too common.',
+    ])
   })
 })
 

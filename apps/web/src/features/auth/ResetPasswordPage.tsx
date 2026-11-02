@@ -6,8 +6,10 @@ import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { ApiProblem, api, unwrap } from '@/api/client'
 import { messageFor } from '@/api/problems'
+import { FormAlert } from '@/components/FormAlert'
 import { Button } from '@/components/ui/button'
-import { PasswordField } from '@/components/ui/field'
+import { LoadingButton } from '@/components/loading-button'
+import { PasswordField } from '@/components/form-field'
 import { AuthLayout } from './AuthLayout'
 import { applyProblem } from './formErrors'
 
@@ -61,13 +63,11 @@ export function ResetPasswordPage() {
             the new one.
           </p>
         </div>
-        <Link
-          to="/login"
-          search={{}}
-          className="inline-flex h-10 w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg"
-        >
-          Sign in
-        </Link>
+        <Button asChild className="w-full">
+          <Link to="/login" search={{}}>
+            Sign in
+          </Link>
+        </Button>
       </AuthLayout>
     )
   }
@@ -78,7 +78,10 @@ export function ResetPasswordPage() {
         <p role="alert" className="text-sm">
           {messageFor('invalid_token')}
         </p>
-        <Link to="/forgot-password" className="font-medium text-accent underline">
+        <Link
+          to="/forgot-password"
+          className="font-medium text-primary underline underline-offset-4"
+        >
           Request a new link
         </Link>
       </AuthLayout>
@@ -88,11 +91,7 @@ export function ResetPasswordPage() {
   return (
     <AuthLayout title="Choose a new password">
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
-        {formError && (
-          <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
-            {formError}
-          </p>
-        )}
+        {formError && <FormAlert>{formError}</FormAlert>}
         <PasswordField
           label="New password"
           autoComplete="new-password"
@@ -105,9 +104,9 @@ export function ResetPasswordPage() {
           }
           {...register('new_password')}
         />
-        <Button type="submit" loading={isSubmitting} className="w-full">
+        <LoadingButton type="submit" loading={isSubmitting} className="w-full">
           Update password
-        </Button>
+        </LoadingButton>
       </form>
     </AuthLayout>
   )

@@ -5,8 +5,9 @@ import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { ApiProblem, api, unwrap } from '@/api/client'
-import { Button } from '@/components/ui/button'
-import { PasswordField } from '@/components/ui/field'
+import { FormAlert } from '@/components/FormAlert'
+import { LoadingButton } from '@/components/loading-button'
+import { PasswordField } from '@/components/form-field'
 import { applyProblem } from '@/features/auth/formErrors'
 
 const schema = z.object({ password: z.string().min(1, 'Enter your password to confirm.') })
@@ -50,13 +51,9 @@ export function DeleteAccountPage() {
         <li>Everything you saved: resources, notes, collections and tags</li>
         <li>Your search and chat history</li>
       </ul>
-      <p className="text-sm text-text-muted">You can&apos;t undo this.</p>
+      <p className="text-sm text-muted-foreground">You can&apos;t undo this.</p>
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
-        {formError && (
-          <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
-            {formError}
-          </p>
-        )}
+        {formError && <FormAlert>{formError}</FormAlert>}
         <PasswordField
           label="Password"
           autoComplete="current-password"
@@ -64,9 +61,9 @@ export function DeleteAccountPage() {
           {...register('password')}
         />
         <div className="flex items-center gap-3">
-          <Button type="submit" variant="danger" loading={isSubmitting}>
+          <LoadingButton type="submit" variant="destructive" loading={isSubmitting}>
             Delete my account and data
-          </Button>
+          </LoadingButton>
           <Link to="/settings/account" className="text-sm font-medium underline">
             Cancel
           </Link>

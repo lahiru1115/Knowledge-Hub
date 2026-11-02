@@ -6,8 +6,9 @@ import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { api, unwrap } from '@/api/client'
-import { Button } from '@/components/ui/button'
-import { Field, PasswordField } from '@/components/ui/field'
+import { FormAlert } from '@/components/FormAlert'
+import { LoadingButton } from '@/components/loading-button'
+import { FormField, PasswordField } from '@/components/form-field'
 import { safeNext } from '@/lib/safeNext'
 import { applyTheme } from '@/lib/theme'
 import { AuthLayout } from './AuthLayout'
@@ -56,23 +57,23 @@ export function RegisterPage() {
     <AuthLayout title="Create your account">
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
         {formError && (
-          <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
+          <FormAlert>
             {formError}{' '}
             {emailTaken && (
               <Link to="/login" search={next ? { next } : {}} className="font-medium underline">
                 Sign in instead?
               </Link>
             )}
-          </p>
+          </FormAlert>
         )}
-        <Field
+        <FormField
           label="Email"
           type="email"
           autoComplete="email"
           error={errors.email?.message}
           {...register('email')}
         />
-        <Field
+        <FormField
           label="Your name"
           autoComplete="name"
           error={errors.display_name?.message}
@@ -90,16 +91,16 @@ export function RegisterPage() {
           }
           {...register('password')}
         />
-        <Button type="submit" loading={isSubmitting} className="w-full">
+        <LoadingButton type="submit" loading={isSubmitting} className="w-full">
           Create account
-        </Button>
+        </LoadingButton>
       </form>
-      <p className="text-center text-sm text-text-muted">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{' '}
         <Link
           to="/login"
           search={next ? { next } : {}}
-          className="font-medium text-accent underline"
+          className="font-medium text-primary underline underline-offset-4"
         >
           Sign in
         </Link>

@@ -9,7 +9,7 @@ function Home() {
   return (
     <section className="space-y-2">
       <h1 className="text-3xl font-semibold">Welcome, {me.display_name}</h1>
-      <p className="text-text-muted">Your library will appear here.</p>
+      <p className="text-muted-foreground">Your library will appear here.</p>
     </section>
   )
 }

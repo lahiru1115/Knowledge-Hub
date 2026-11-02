@@ -5,8 +5,10 @@ import { useState } from 'react'
 import { useForm, useWatch } from 'react-hook-form'
 import { z } from 'zod'
 import { ApiProblem, api, unwrap } from '@/api/client'
+import { FormAlert } from '@/components/FormAlert'
 import { Button } from '@/components/ui/button'
-import { PasswordField } from '@/components/ui/field'
+import { LoadingButton } from '@/components/loading-button'
+import { PasswordField } from '@/components/form-field'
 import { applyProblem } from '@/features/auth/formErrors'
 import { useSignOut } from '@/features/auth/session'
 
@@ -62,11 +64,7 @@ export function AccountSection() {
           Change password
         </h2>
         <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
-          {formError && (
-            <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
-              {formError}
-            </p>
-          )}
+          {formError && <FormAlert>{formError}</FormAlert>}
           <PasswordField
             label="Current password"
             autoComplete="current-password"
@@ -85,9 +83,9 @@ export function AccountSection() {
             }
             {...register('new_password')}
           />
-          <Button type="submit" loading={isSubmitting}>
+          <LoadingButton type="submit" loading={isSubmitting}>
             Change password
-          </Button>
+          </LoadingButton>
           <p role="status" className="text-sm text-success">
             {saved ? 'Password changed. You were signed out on your other devices.' : ''}
           </p>
@@ -98,33 +96,34 @@ export function AccountSection() {
         <h2 id="session-title" className="text-xl font-semibold">
           Sign out
         </h2>
-        <Button
-          variant="secondary"
+        <LoadingButton
+          variant="outline"
           loading={signOut.isPending}
           onClick={() => {
             signOut.mutate()
           }}
         >
           Sign out
-        </Button>
+        </LoadingButton>
       </section>
 
       <section
         aria-labelledby="danger-title"
-        className="space-y-3 rounded-lg border border-danger p-4"
+        className="space-y-3 rounded-lg border border-destructive p-4"
       >
-        <h2 id="danger-title" className="text-xl font-semibold text-danger">
+        <h2 id="danger-title" className="text-xl font-semibold text-destructive">
           Danger zone
         </h2>
-        <p className="text-sm text-text-muted">
+        <p className="text-sm text-muted-foreground">
           Delete your account and everything you saved. This can&apos;t be undone.
         </p>
-        <Link
-          to="/settings/account/delete"
-          className="inline-flex h-10 items-center rounded-md border border-danger px-4 text-sm font-medium text-danger"
+        <Button
+          asChild
+          variant="outline"
+          className="border-destructive text-destructive hover:text-destructive"
         >
-          Delete account…
-        </Link>
+          <Link to="/settings/account/delete">Delete account…</Link>
+        </Button>
       </section>
     </div>
   )

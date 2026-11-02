@@ -3,8 +3,9 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
-import { Button } from '@/components/ui/button'
-import { Field } from '@/components/ui/field'
+import { FormAlert } from '@/components/FormAlert'
+import { LoadingButton } from '@/components/loading-button'
+import { FormField } from '@/components/form-field'
 import { applyProblem } from '@/features/auth/formErrors'
 import { meQueryOptions } from '@/features/auth/session'
 import { useUpdateMe } from './useUpdateMe'
@@ -48,22 +49,23 @@ export function ProfileSection() {
         Profile
       </h2>
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
-        {formError && (
-          <p role="alert" className="rounded-md border border-danger p-3 text-sm text-danger">
-            {formError}
-          </p>
-        )}
-        <Field
+        {formError && <FormAlert>{formError}</FormAlert>}
+        <FormField
           label="Your name"
           autoComplete="name"
           error={errors.display_name?.message}
           {...register('display_name')}
         />
-        <Field label="Email" value={me.email} readOnly hint="You can't change your email yet." />
+        <FormField
+          label="Email"
+          value={me.email}
+          readOnly
+          hint="You can't change your email yet."
+        />
         <div className="flex items-center gap-3">
-          <Button type="submit" loading={isSubmitting} disabled={!isDirty}>
+          <LoadingButton type="submit" loading={isSubmitting} disabled={!isDirty}>
             Save changes
-          </Button>
+          </LoadingButton>
           <p role="status" className="text-sm text-success">
             {status === 'saved' ? 'Saved' : ''}
           </p>

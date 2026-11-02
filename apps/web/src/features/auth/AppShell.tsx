@@ -1,7 +1,7 @@
 import { Link, Outlet } from '@tanstack/react-router'
 import { useSuspenseQuery } from '@tanstack/react-query'
 import { useEffect } from 'react'
-import { Button } from '@/components/ui/button'
+import { LoadingButton } from '@/components/loading-button'
 import { applyTheme } from '@/lib/theme'
 import { meQueryOptions, useSignOut } from './session'
 
@@ -24,16 +24,16 @@ export function AppShell() {
           <Link to="/settings/profile" className="text-sm font-medium underline">
             Settings
           </Link>
-          <span className="text-sm text-text-muted">{me.display_name}</span>
-          <Button
-            variant="secondary"
+          <span className="text-sm text-muted-foreground">{me.display_name}</span>
+          <LoadingButton
+            variant="outline"
             loading={signOut.isPending}
             onClick={() => {
               signOut.mutate()
             }}
           >
             Sign out
-          </Button>
+          </LoadingButton>
         </div>
       </header>
       <main className="mx-auto max-w-3xl px-4 py-8">

@@ -2,8 +2,10 @@ import { useSuspenseQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { ApiProblem } from '@/api/client'
 import { messageFor } from '@/api/problems'
+import { FormAlert } from '@/components/FormAlert'
+import { Field, FieldLabel } from '@/components/ui/field'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
 import { meQueryOptions } from '@/features/auth/session'
-import { cn } from '@/lib/cn'
 import { applyTheme, type ThemePreference } from '@/lib/theme'
 import { useUpdateMe } from './useUpdateMe'
 
@@ -36,35 +38,26 @@ export function AppearanceSection() {
       <h2 id="appearance-title" className="text-xl font-semibold">
         Appearance
       </h2>
-      <fieldset className="space-y-2">
-        <legend className="text-sm font-medium">Theme</legend>
-        <div className="inline-flex rounded-md border border-border-control p-0.5">
+      <Field>
+        <FieldLabel id="theme-label">Theme</FieldLabel>
+        <ToggleGroup
+          type="single"
+          variant="outline"
+          value={current}
+          aria-labelledby="theme-label"
+          onValueChange={(value) => {
+            // Radix reports an empty value when the active item is pressed again; keep the current theme.
+            if (value) void choose(value as ThemePreference)
+          }}
+        >
           {options.map((o) => (
-            <label
-              key={o.value}
-              className={cn(
-                'cursor-pointer rounded-sm px-4 py-1.5 text-sm has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-accent',
-                current === o.value ? 'bg-accent text-accent-fg' : 'hover:bg-bg-subtle',
-              )}
-            >
-              <input
-                type="radio"
-                name="theme"
-                value={o.value}
-                checked={current === o.value}
-                onChange={() => void choose(o.value)}
-                className="sr-only"
-              />
+            <ToggleGroupItem key={o.value} value={o.value}>
               {o.label}
-            </label>
+            </ToggleGroupItem>
           ))}
-        </div>
-      </fieldset>
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
-      )}
+        </ToggleGroup>
+      </Field>
+      {error && <FormAlert>{error}</FormAlert>}
     </section>
   )
 }

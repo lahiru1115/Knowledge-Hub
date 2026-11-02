@@ -8,21 +8,21 @@ export function ErrorPanel({ error, onRetry }: { error: unknown; onRetry?: () =>
   const problem = error instanceof ApiProblem ? error : undefined
   return (
     <div role="alert" className="mx-auto mt-16 max-w-md space-y-4 px-4 text-center">
-      <AlertTriangle className="mx-auto size-8 text-danger" aria-hidden="true" />
+      <AlertTriangle className="mx-auto size-8 text-destructive" aria-hidden="true" />
       <h1 className="text-xl font-semibold">Something went wrong</h1>
-      <p className="text-text-muted">
+      <p className="text-muted-foreground">
         {problem
           ? messageFor(problem.code, problem)
           : 'Something went wrong on our side. Try again in a moment.'}
       </p>
       {problem?.traceId && (
-        <details className="text-sm text-text-muted">
+        <details className="text-sm text-muted-foreground">
           <summary className="cursor-pointer">Details</summary>
           <p className="mt-1 font-mono">Trace ID: {problem.traceId}</p>
         </details>
       )}
       <Button
-        variant="secondary"
+        variant="outline"
         onClick={
           onRetry ??
           (() => {
