@@ -31,6 +31,7 @@ paths:
       summary: Set the CSRF cookie
       security: []
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Cookie `kh_csrf` set" }
   /auth/register:
     post:
@@ -44,6 +45,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/RegisterRequest' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '201':
           description: Registered and signed in
           headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
@@ -65,6 +67,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/LoginRequest' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Signed in
           headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
@@ -82,6 +85,7 @@ paths:
       summary: Sign out
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Cookies cleared, refresh token revoked" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -93,6 +97,7 @@ paths:
       security: [{ refreshCookieAuth: [] }]
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204':
           description: New cookies issued
           headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
@@ -114,6 +119,7 @@ paths:
               required: [email]
               properties: { email: { type: string, format: email } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '202': { description: "Accepted; same response whether or not the account exists" }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/RateLimited' }
@@ -135,6 +141,7 @@ paths:
                 token: { type: string }
                 new_password: { type: string, minLength: 12, maxLength: 128 }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Password changed; all sessions revoked" }
         '400': { $ref: '#/components/responses/ValidationFailed' }
   /auth/oauth/{provider}:
@@ -146,6 +153,7 @@ paths:
       parameters:
         - { name: provider, in: path, required: true, schema: { type: string } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '302': { description: "Redirect to the provider" }
         '404': { $ref: '#/components/responses/NotFound' }
   /auth/oauth/{provider}/callback:
@@ -159,6 +167,7 @@ paths:
         - { name: code, in: query, required: true, schema: { type: string } }
         - { name: state, in: query, required: true, schema: { type: string } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '302':
           description: Signed in; redirect to the app
           headers: { Set-Cookie: { $ref: '#/components/headers/SetCookie' } }
@@ -171,6 +180,7 @@ paths:
       operationId: getMe
       summary: Current user and preferences
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The user
           content:
@@ -186,6 +196,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/UpdateMeRequest' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Updated user
           content:
@@ -197,17 +208,19 @@ paths:
       tags: [Identity]
       operationId: deleteMe
       summary: Delete account (password in body)
-      description: The current password is required. OAuth-only accounts (Could) will need a fresh sign-in instead, which is not specified yet.
+      description: |
+        Accounts with a password must send `password`. OAuth-only accounts (Could, FR-AUTH-10) omit it
+        and instead need a sign-in within the last 5 minutes; otherwise `401 invalid_credentials`.
       x-csrf: true
       requestBody:
-        required: true
         content:
           application/json:
             schema:
               type: object
-              required: [password]
-              properties: { password: { type: string } }
+              properties:
+                password: { type: string, description: Required unless the account has no password }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Account and all data deleted" }
         '401': { $ref: '#/components/responses/Problem' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -228,6 +241,7 @@ paths:
                 current_password: { type: string }
                 new_password: { type: string, minLength: 12, maxLength: 128 }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Changed; other sessions revoked" }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Problem' }
@@ -238,6 +252,7 @@ paths:
       operationId: getMyAiUsage
       summary: Today's AI usage and limits
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Usage per operation
           content:
@@ -250,6 +265,7 @@ paths:
       operationId: listCollections
       summary: All collections with resource_count, plus the Inbox count
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Collections
           content:
@@ -273,6 +289,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/CollectionCreate' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '201':
           description: Created
           content:
@@ -299,6 +316,7 @@ paths:
                   type: array
                   items: { $ref: '#/components/schemas/Id' }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Order saved" }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -312,6 +330,7 @@ paths:
       operationId: getCollection
       summary: One collection
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The collection
           content:
@@ -328,6 +347,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/CollectionUpdate' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Updated
           content:
@@ -352,6 +372,7 @@ paths:
           description: Target for `move`; empty means Inbox
           schema: { $ref: '#/components/schemas/Id' }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Deleted" }
         '400': { $ref: '#/components/responses/ValidationFailed' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -391,6 +412,7 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: A page of resources
           content:
@@ -407,6 +429,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/ResourceCreate' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '201':
           description: Saved with `metadata_status = pending`
           content:
@@ -423,6 +446,7 @@ paths:
       parameters:
         - { name: url, in: query, required: true, schema: { type: string, maxLength: 2048 } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The existing resource with the same normalised URL, or null (FR-RES-11)
           content:
@@ -448,6 +472,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/BulkRequest' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Number of resources changed
           content:
@@ -468,6 +493,7 @@ paths:
       operationId: getResource
       summary: One resource
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The resource
           content:
@@ -485,6 +511,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/ResourceUpdate' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Updated
           content:
@@ -500,6 +527,7 @@ paths:
       summary: Soft delete (undo within 7 days)
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Deleted" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -513,6 +541,7 @@ paths:
       summary: Undo delete
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Restored
           content:
@@ -529,6 +558,7 @@ paths:
       summary: Retry metadata extraction
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '202':
           description: Extraction queued
           content:
@@ -551,6 +581,7 @@ paths:
               required: [url]
               properties: { url: { type: string, maxLength: 2048 } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: What could be fetched (possibly partial)
           content:
@@ -566,6 +597,7 @@ paths:
       operationId: listTags
       summary: Tags with usage counts
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Tags
           content:
@@ -595,6 +627,7 @@ paths:
               required: [name]
               properties: { name: { $ref: '#/components/schemas/TagName' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Renamed
           content:
@@ -610,6 +643,7 @@ paths:
       summary: Delete (resources stay)
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Deleted" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -631,6 +665,7 @@ paths:
               required: [target_tag_id]
               properties: { target_tag_id: { $ref: '#/components/schemas/Id' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The surviving tag
           content:
@@ -646,6 +681,7 @@ paths:
       operationId: listViews
       summary: Saved views (Could)
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Views
           content:
@@ -668,6 +704,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/SavedViewInput' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '201':
           description: Created
           content:
@@ -688,6 +725,7 @@ paths:
         content:
           application/json: { schema: { $ref: '#/components/schemas/SavedViewInput' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Updated
           content:
@@ -702,6 +740,7 @@ paths:
       summary: Delete a saved view (Could)
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Deleted" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -718,6 +757,7 @@ paths:
           description: IANA time zone used to bucket weekly activity (FR-DASH-04). Defaults to UTC.
           schema: { type: string, default: UTC, example: Europe/London }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Dashboard
           content:
@@ -734,6 +774,7 @@ paths:
           required: true
           schema: { type: string, enum: [json, csv] }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The export file (attachment)
           content:
@@ -748,6 +789,7 @@ paths:
       operationId: getAiStatus
       summary: AI availability and profile
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Status
           content:
@@ -770,6 +812,7 @@ paths:
                 url: { type: string, maxLength: 2048 }
                 resource_id: { $ref: '#/components/schemas/Id' }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Up to 5 suggestions, existing tags first
           content:
@@ -802,6 +845,7 @@ paths:
       summary: Generate or regenerate
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The updated resource
           content:
@@ -818,6 +862,7 @@ paths:
       summary: Remove summary
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Summary removed" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -830,6 +875,7 @@ paths:
       operationId: listRelatedResources
       summary: Up to 5 related resources
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Related resources
           content:
@@ -851,9 +897,10 @@ paths:
       operationId: searchSemantic
       summary: Semantic search (page is always 1)
       parameters:
-        - { name: q, in: query, required: true, description: 'Length limit proposed here; not yet in the SRS', schema: { type: string, minLength: 1, maxLength: 500 } }
+        - { name: q, in: query, required: true, description: 'Max 500 characters (SRS Appendix C)', schema: { type: string, minLength: 1, maxLength: 500 } }
         - $ref: '#/components/parameters/PageSize'
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: One result per resource, with a snippet
           content:
@@ -869,6 +916,7 @@ paths:
       operationId: listChatSessions
       summary: List chats
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Chats, most recently updated first
           content:
@@ -894,6 +942,7 @@ paths:
               properties:
                 scope_collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '201':
           description: Created
           content:
@@ -909,6 +958,7 @@ paths:
       operationId: getChatSession
       summary: Chat with messages
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: The chat
           content:
@@ -929,6 +979,7 @@ paths:
               required: [title]
               properties: { title: { type: string, minLength: 1, maxLength: 200 } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Renamed
           content:
@@ -943,6 +994,7 @@ paths:
       summary: Delete
       x-csrf: true
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '204': { description: "Deleted" }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/CsrfFailed' }
@@ -966,8 +1018,9 @@ paths:
             schema:
               type: object
               required: [content]
-              properties: { content: { type: string, minLength: 1, maxLength: 4000, description: 'Length limit proposed here; not yet in the SRS' } }
+              properties: { content: { type: string, minLength: 1, maxLength: 4000, description: 'Max 4,000 characters (SRS Appendix C)' } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Event stream
           content:
@@ -990,6 +1043,7 @@ paths:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/PageSize'
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: A page of users
           content:
@@ -1013,6 +1067,7 @@ paths:
               required: [is_disabled]
               properties: { is_disabled: { type: boolean } }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Updated
           content:
@@ -1032,6 +1087,7 @@ paths:
           description: Limit to one user. Omit for totals across all users (rows then have no user_id).
           schema: { $ref: '#/components/schemas/Id' }
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Usage rows
           content:
@@ -1064,6 +1120,7 @@ paths:
       security: []
       servers: [{ url: / }]
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200': { description: "Alive" }
   /health/ready:
     get:
@@ -1074,6 +1131,7 @@ paths:
       security: []
       servers: [{ url: / }]
       responses:
+        default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
           description: Ready
           content:
@@ -1118,6 +1176,10 @@ components:
       schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
 
   responses:
+    UnexpectedError:
+      description: 500 internal_error (no details in production) or any other unlisted problem
+      content:
+        application/problem+json: { schema: { $ref: '#/components/schemas/Problem' } }
     Problem:
       description: Problem Details
       content:
@@ -1353,6 +1415,11 @@ components:
           type: array
           maxItems: 20
           items: { $ref: '#/components/schemas/TagName' }
+        ai_tags:
+          type: array
+          maxItems: 20
+          description: Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`.
+          items: { $ref: '#/components/schemas/TagName' }
     ResourceUpdate:
       type: object
       properties:
@@ -1365,6 +1432,11 @@ components:
         tags:
           type: array
           maxItems: 20
+          items: { $ref: '#/components/schemas/TagName' }
+        ai_tags:
+          type: array
+          maxItems: 20
+          description: Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`.
           items: { $ref: '#/components/schemas/TagName' }
         is_favourite: { type: boolean }
         is_archived: { type: boolean }

@@ -256,7 +256,7 @@ check. Unless stated otherwise, every requirement applies only to the signed-in 
 | FR-AUTH-06 | S | The system shall let a user reset a forgotten password by email. | Requesting a reset always returns `202` with the same message. If the account exists, an email with a single-use link valid for 30 minutes is sent. Setting a new password through the link revokes all of the user's refresh tokens. A used or expired link returns `400 invalid_token`. |
 | FR-AUTH-07 | S | The system shall let a user change their password. | The current password is required. On success all other sessions are revoked and the current one stays signed in. |
 | FR-AUTH-08 | S | The system shall let a user update their display name and preferences. | Display name rules as in FR-AUTH-01. Preferences: theme (`system`, `light`, `dark`) and AI settings (FR-AI-12). |
-| FR-AUTH-09 | M | The system shall let a user delete their account and all of their data. | The current password (or a fresh sign-in for OAuth-only accounts) is required. All of the user's `core` rows are deleted in one transaction, the session ends, and a `user.deleted` event is queued. The AI service removes all of the user's `ai` rows within 5 minutes. Signing in again with the old credentials returns `401`. |
+| FR-AUTH-09 | M | The system shall let a user delete their account and all of their data. | The current password (or, for OAuth-only accounts, a sign-in within the last 5 minutes) is required. All of the user's `core` rows are deleted in one transaction, the session ends, and a `user.deleted` event is queued. The AI service removes all of the user's `ai` rows within 5 minutes. Signing in again with the old credentials returns `401`. |
 | FR-AUTH-10 | C | The system may let a user sign in with GitHub or Google (OAuth 2.0 / OpenID Connect). | A new OAuth user gets an account with no password. An existing account with the same verified email is linked only after the user signs in with their password. |
 
 ### 3.2 COL — Collections
@@ -1128,6 +1128,9 @@ These defaults are referenced by the requirements and can be changed through con
 | Undo / restore window for deleted resources | 7 days | FR-RES-04 |
 | Metadata fetch | 5 s timeout, 5 MB, 5 redirects | FR-META-05 |
 | Page size | 20 (max 100) | FR-SRCH-04 |
+| Chat message length | 4,000 characters | FR-AI-06 |
+| Semantic search query length | 500 characters | FR-AI-05 |
+| Recent sign-in window for deleting an OAuth-only account | 5 minutes | FR-AUTH-09 |
 | AI quota, free profile | 100 chat messages, 300 summaries, 300 tag suggestions, 500 semantic searches per user per day | FR-AI-10 |
 | AI quota, Claude profile | 30 chat messages, 100 summaries, 200 tag suggestions per user per day; a daily cost cap of USD 0.50 per user and a monthly cap of USD 10 for the deployment | FR-AI-10 |
 | Outbox retries | 8 attempts, exponential backoff from 10 s with jitter | NFR-REL-02 |
