@@ -2,12 +2,13 @@ import { Loader2 } from 'lucide-react'
 import type { ButtonHTMLAttributes } from 'react'
 import { cn } from '@/lib/cn'
 
-type Variant = 'primary' | 'secondary' | 'ghost'
+type Variant = 'primary' | 'secondary' | 'ghost' | 'danger'
 
 const variants: Record<Variant, string> = {
   primary: 'bg-accent text-accent-fg hover:opacity-90',
   secondary: 'border border-border-control bg-bg text-text hover:bg-bg-subtle',
   ghost: 'text-text hover:bg-bg-subtle',
+  danger: 'bg-danger text-danger-fg hover:opacity-90',
 }
 
 interface Props extends ButtonHTMLAttributes<HTMLButtonElement> {

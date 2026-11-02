@@ -2,6 +2,7 @@ using KnowledgeHub.Api.Http;
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Options;
 
 namespace KnowledgeHub.Api.Identity;
@@ -17,8 +18,14 @@ public static class IdentityEndpoints
         auth.MapPost("/login", Login).RequireRateLimiting(RateLimiting.LoginPerIp);
         auth.MapPost("/logout", Logout).RequireAuthorization();
         auth.MapPost("/refresh", Refresh);
+        auth.MapPost("/password-reset", RequestPasswordReset).RequireRateLimiting(RateLimiting.ResetPerIp);
+        auth.MapPost("/password-reset/confirm", ConfirmPasswordReset);
 
-        api.MapGet("/me", Me).RequireAuthorization();
+        var me = api.MapGroup("/me").RequireAuthorization();
+        me.MapGet("", Me);
+        me.MapPatch("", UpdateMe);
+        me.MapDelete("", DeleteMe);
+        me.MapPut("/password", ChangePassword);
     }
 
     private static NoContent Csrf(HttpContext http, IOptions<AuthOptions> options)
@@ -71,4 +78,37 @@ public static class IdentityEndpoints
 
     private static async Task<Ok<UserDto>> Me(ICurrentUser user, AuthService auth, CancellationToken ct) =>
         TypedResults.Ok(await auth.GetMeAsync(user.UserId!.Value, ct));
+
+    private static async Task<Accepted> RequestPasswordReset(PasswordResetRequest body, AccountService account, CancellationToken ct)
+    {
+        await account.RequestPasswordResetAsync(body, ct);
+        return TypedResults.Accepted((string?)null);
+    }
+
+    private static async Task<NoContent> ConfirmPasswordReset(PasswordResetConfirmRequest body, AccountService account, CancellationToken ct)
+    {
+        await account.ConfirmPasswordResetAsync(body, ct);
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<Ok<UserDto>> UpdateMe(UpdateMeRequest body, ICurrentUser user, AccountService account, CancellationToken ct) =>
+        TypedResults.Ok(await account.UpdateMeAsync(user.UserId!.Value, body, ct));
+
+    private static async Task<NoContent> ChangePassword(
+        ChangePasswordRequest body, HttpContext http, ICurrentUser user, AccountService account,
+        IOptions<AuthOptions> options, CancellationToken ct)
+    {
+        var tokens = await account.ChangePasswordAsync(user.UserId!.Value, body, ct);
+        AuthCookies.IssueSession(http, tokens, options.Value.SecureCookies);
+        return TypedResults.NoContent();
+    }
+
+    private static async Task<NoContent> DeleteMe(
+        [FromBody] DeleteAccountRequest? body, HttpContext http, ICurrentUser user, AccountService account,
+        IOptions<AuthOptions> options, CancellationToken ct)
+    {
+        await account.DeleteAccountAsync(user.UserId!.Value, body?.Password, ct);
+        AuthCookies.ClearSession(http, options.Value.SecureCookies);
+        return TypedResults.NoContent();
+    }
 }

@@ -32,6 +32,20 @@ public sealed class User
     public DateTimeOffset CreatedAt { get; set; }
     public DateTimeOffset UpdatedAt { get; set; }
 
+    /// <summary>
+    /// Sets a new password and replaces the security stamp, which ends every other session within a minute
+    /// (Doc 02 §9.1). Also clears any lockout, so a locked-out user can recover by resetting.
+    /// </summary>
+    public void SetPassword(string passwordHash, DateTimeOffset now)
+    {
+        PasswordHash = passwordHash;
+        SecurityStamp = Guid.NewGuid();
+        FailedLoginCount = 0;
+        FailedLoginWindowStartedAt = null;
+        LockedUntil = null;
+        UpdatedAt = now;
+    }
+
     public bool IsLocked(DateTimeOffset now) => LockedUntil is { } until && until > now;
 
     /// <summary>Records a failed sign-in; locks the account when the threshold is reached (FR-AUTH-02).</summary>

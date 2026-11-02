@@ -9,14 +9,19 @@ namespace KnowledgeHub.Api.Http;
 /// user is disabled or gone. The lookup is cached for 60 seconds (Doc 02 §9.1), so revocation takes effect
 /// within a minute.
 /// </summary>
-public sealed class SecurityStampValidator(IMemoryCache cache, IAppDbContext db)
+public sealed class SecurityStampValidator(IMemoryCache cache, IAppDbContext db) : ISessionCache
 {
     private static readonly TimeSpan s_ttl = TimeSpan.FromSeconds(60);
+    private static string Key(Guid userId) => $"stamp:{userId}";
+
+    /// <summary>Called after a password change, reset or deletion so the change applies at once.</summary>
+    public void Forget(Guid userId) => cache.Remove(Key(userId));
+
     private sealed record Snapshot(Guid Stamp, bool Disabled);
 
     public async Task<bool> IsValidAsync(Guid userId, string? stampClaim, CancellationToken ct)
     {
-        var snapshot = await cache.GetOrCreateAsync($"stamp:{userId}", async entry =>
+        var snapshot = await cache.GetOrCreateAsync(Key(userId), async entry =>
         {
             entry.AbsoluteExpirationRelativeToNow = s_ttl;
             return await db.Users.AsNoTracking()

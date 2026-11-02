@@ -54,3 +54,35 @@ public class UserTests
         Assert.Equal(ThemePreference.System, a.Preferences.Theme);
     }
 }
+
+public class UserPasswordTests
+{
+    [Fact]
+    public void Setting_a_password_replaces_the_security_stamp_and_clears_any_lockout()
+    {
+        var now = new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero);
+        var user = new User { PasswordHash = "old" };
+        for (var i = 0; i < 10; i++) user.RegisterFailedLogin(now, 10, TimeSpan.FromMinutes(15), TimeSpan.FromMinutes(15));
+        var stamp = user.SecurityStamp;
+        Assert.True(user.IsLocked(now));
+
+        user.SetPassword("new-hash", now.AddMinutes(1));
+
+        Assert.Equal("new-hash", user.PasswordHash);
+        Assert.NotEqual(stamp, user.SecurityStamp);
+        Assert.False(user.IsLocked(now.AddMinutes(1)));
+        Assert.Equal(0, user.FailedLoginCount);
+    }
+
+    [Fact]
+    public void A_reset_token_is_usable_once_and_only_before_it_expires()
+    {
+        var now = new DateTimeOffset(2026, 11, 2, 8, 0, 0, TimeSpan.Zero);
+        var token = new PasswordResetToken { CreatedAt = now, ExpiresAt = now.AddMinutes(30) };
+
+        Assert.True(token.IsUsable(now.AddMinutes(29)));
+        Assert.False(token.IsUsable(now.AddMinutes(30)));
+        token.UsedAt = now.AddMinutes(1);
+        Assert.False(token.IsUsable(now.AddMinutes(2)));
+    }
+}

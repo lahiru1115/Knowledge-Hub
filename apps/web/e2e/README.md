@@ -8,4 +8,6 @@ migrate-core`).
 2. Start the Core API on port 8080 with the settings in `.env.example` (`ConnectionStrings__Core`,
    `Auth__SigningKey`). Raise the sign-in and registration rate limits for test runs, for example
    `Auth__RateLimits__RegisterPerIpPerHour=1000` and `Auth__RateLimits__LoginPerIpPerMinute=1000`.
-3. `npm run e2e` from `apps/web` (Playwright starts the Vite dev server).
+3. Do not run Mailpit on the same ports: the tests start a small mail server of their own (SMTP :1025, HTTP :8025)
+   so they can read password reset emails.
+4. `npm run e2e` from `apps/web` (Playwright starts the Vite dev server).

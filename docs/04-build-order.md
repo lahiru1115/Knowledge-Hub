@@ -30,7 +30,7 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 
 ## Stage 2 — Identity (Core API + web shell)
 
-**Status:** items 2.1 to 2.6 done: backend (register, login, logout, refresh, `/me`, CSRF, lockout, rate limits, audit, `migrate-core`) and the web shell (Vite + React app, generated API client, sign-in and register screens, silent refresh, route guard, `web.yml`). Still open: 2.7 Should items (password reset and change, profile update, account deletion), which also adds the "Forgot password?" link to sign-in.
+**Status:** done. Backend (register, login, logout, refresh, `/me`, CSRF, lockout, rate limits, audit, `migrate-core`), the web shell, and the Should items: password reset by email, password change, profile and theme preferences, and account deletion (settings screens included). One piece is deferred: account deletion must also queue the `user.deleted` outbox event so the AI service purges its data (FR-AUTH-09). That is added with the outbox in 4.1 (see below).
 
 | # | Work | Requirements |
 |---|---|---|
@@ -62,7 +62,7 @@ Rule for every stage: if it adds or changes an endpoint, update `contracts/opena
 
 | # | Work | Requirements |
 |---|---|---|
-| 4.1 | `outbox` table, writer in the same transaction as the change, `BackgroundService` worker with retries and dead-letter | ADR-004, DR-05 |
+| 4.1 | `outbox` table, writer in the same transaction as the change, `BackgroundService` worker with retries and dead-letter. Also emit `user.deleted` from `AccountService.DeleteAccountAsync` (deferred from Stage 2), and move password reset email onto the outbox if in-memory sending proves too fragile | ADR-004, DR-05, FR-AUTH-09 |
 | 4.2 | Metadata fetcher: AngleSharp, SmartReader, type guessing from configuration | FR-META-01, 02 |
 | 4.3 | SSRF guard with a blocked-URL test suite (private ranges, redirects, DNS rebinding) | FR-META-05, NFR-SEC-07 |
 | 4.4 | `POST /metadata/preview`, `POST /resources/{id}/metadata/refresh`, status polling in the web app | FR-META-03, 04 |

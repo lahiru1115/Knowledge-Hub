@@ -1,5 +1,6 @@
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Application.Identity;
+using KnowledgeHub.Infrastructure.Email;
 using KnowledgeHub.Infrastructure.Persistence;
 using KnowledgeHub.Infrastructure.Security;
 using Microsoft.EntityFrameworkCore;
@@ -22,6 +23,12 @@ public static class DependencyInjection
         services.AddSingleton<IPasswordHasher, Argon2idPasswordHasher>();
         services.AddSingleton<ICommonPasswords, CommonPasswords>();
         services.AddSingleton<ITokenService, TokenService>();
+
+        services.AddOptions<SmtpOptions>().Bind(configuration.GetSection(SmtpOptions.Section));
+        services.AddSingleton<SmtpEmailTransport>();
+        services.AddSingleton<BackgroundEmailSender>();
+        services.AddSingleton<IEmailSender>(sp => sp.GetRequiredService<BackgroundEmailSender>());
+        services.AddHostedService(sp => sp.GetRequiredService<BackgroundEmailSender>());
         return services;
     }
 

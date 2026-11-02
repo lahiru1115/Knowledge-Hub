@@ -1,4 +1,8 @@
+using KnowledgeHub.Application.Common;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Xunit;
 
 namespace KnowledgeHub.IntegrationTests;
@@ -9,6 +13,15 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string AdminEmail = "admin@example.com";
 
     public Database Db { get; } = new();
+    public CapturedEmails Emails { get; } = new();
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) =>
+        builder.ConfigureServices(services =>
+        {
+            // Capture emails instead of sending them over SMTP.
+            services.RemoveAll<IEmailSender>();
+            services.AddSingleton<IEmailSender>(Emails);
+        });
 
     public async ValueTask InitializeAsync()
     {
@@ -21,6 +34,7 @@ public sealed class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         Environment.SetEnvironmentVariable("Auth__RateLimits__LoginPerIpAndEmailPerMinute", "1000");
         Environment.SetEnvironmentVariable("Auth__RateLimits__LoginPerIpPerMinute", "1000");
         Environment.SetEnvironmentVariable("Auth__RateLimits__RegisterPerIpPerHour", "1000");
+        Environment.SetEnvironmentVariable("Auth__RateLimits__ResetPerIpPerHour", "1000");
         Environment.SetEnvironmentVariable("Auth__RateLimits__GeneralPerUserPerMinute", "100000");
     }
 

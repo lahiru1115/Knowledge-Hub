@@ -63,6 +63,11 @@ export function LoginPage() {
           error={errors.password?.message}
           {...register('password')}
         />
+        <p className="text-right text-sm">
+          <Link to="/forgot-password" className="font-medium text-accent underline">
+            Forgot password?
+          </Link>
+        </p>
         <Button type="submit" loading={isSubmitting} className="w-full">
           Sign in
         </Button>

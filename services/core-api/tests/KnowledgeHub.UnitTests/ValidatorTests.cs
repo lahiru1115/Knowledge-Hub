@@ -43,3 +43,40 @@ public class ValidatorTests
     public void Display_names_over_60_characters_fail() =>
         Assert.False(_validator.Validate(Valid() with { DisplayName = new string('x', 61) }).IsValid);
 }
+
+public class AccountValidatorTests
+{
+    private static readonly CommonPasswords s_common = new();
+
+    [Fact]
+    public void Password_reset_confirm_applies_the_same_password_rules_as_registration()
+    {
+        var validator = new PasswordResetConfirmValidator(s_common);
+
+        Assert.True(validator.Validate(new PasswordResetConfirmRequest("token", "a long unusual passphrase")).IsValid);
+        var short_ = validator.Validate(new PasswordResetConfirmRequest("token", "short"));
+        Assert.Contains(short_.Errors, e => e.PropertyName == "NewPassword");
+        Assert.False(validator.Validate(new PasswordResetConfirmRequest("token", "PasswordPassword")).IsValid);
+        Assert.False(validator.Validate(new PasswordResetConfirmRequest("", "a long unusual passphrase")).IsValid);
+    }
+
+    [Fact]
+    public void Change_password_needs_the_current_password_and_a_valid_new_one()
+    {
+        var validator = new ChangePasswordValidator(s_common);
+
+        Assert.True(validator.Validate(new ChangePasswordRequest("old password", "a long unusual passphrase")).IsValid);
+        Assert.False(validator.Validate(new ChangePasswordRequest("", "a long unusual passphrase")).IsValid);
+        Assert.False(validator.Validate(new ChangePasswordRequest("old password", new string('a', 129))).IsValid);
+    }
+
+    [Theory]
+    [InlineData(null, true)]
+    [InlineData("Ada", true)]
+    [InlineData("", false)]
+    [InlineData("   ", false)]
+    public void Update_me_checks_the_display_name_only_when_present(string? name, bool valid)
+    {
+        Assert.Equal(valid, new UpdateMeValidator().Validate(new UpdateMeRequest(name, null)).IsValid);
+    }
+}

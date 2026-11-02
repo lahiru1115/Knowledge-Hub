@@ -38,9 +38,13 @@ builder.Services.AddMemoryCache();
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddValidatorsFromAssemblyContaining<RegisterRequestValidator>();
 builder.Services.AddScoped<AuthService>();
+builder.Services.AddScoped<AccountService>();
+builder.Services.AddScoped<SessionIssuer>();
+builder.Services.AddScoped<AuditLog>();
 builder.Services.AddScoped<IRequestContext, HttpRequestContext>();
 builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
 builder.Services.AddScoped<SecurityStampValidator>();
+builder.Services.AddScoped<ISessionCache>(sp => sp.GetRequiredService<SecurityStampValidator>());
 
 // Access token JWT, read from the kh_at cookie (Doc 02 §3.3, §9.1).
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme).AddJwtBearer();

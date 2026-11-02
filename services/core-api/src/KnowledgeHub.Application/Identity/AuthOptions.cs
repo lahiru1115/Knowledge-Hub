@@ -17,6 +17,11 @@ public sealed class AuthOptions
     /// <summary>The account registered with this email becomes the first admin (FR-ADM-04).</summary>
     public string? AdminEmail { get; set; }
     public bool SecureCookies { get; set; } = true;
+    /// <summary>Public address of the web app; used in links in emails.</summary>
+    public string AppBaseUrl { get; set; } = "http://localhost:5173";
+    public int PasswordResetMinutes { get; set; } = 30;
+    /// <summary>Deleting an OAuth-only account needs a sign-in this recent (FR-AUTH-09).</summary>
+    public int RecentSignInMinutes { get; set; } = 5;
 
     public RateLimitOptions RateLimits { get; set; } = new();
 }

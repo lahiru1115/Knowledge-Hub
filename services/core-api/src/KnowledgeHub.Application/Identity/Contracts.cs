@@ -22,3 +22,16 @@ public sealed record IssuedTokens(string AccessToken, DateTimeOffset AccessExpir
 public sealed record AuthResult(UserDto User, IssuedTokens Tokens);
 
 public sealed record AccessToken(string Value, DateTimeOffset ExpiresAt);
+
+public sealed record PasswordResetRequest(string Email);
+
+public sealed record PasswordResetConfirmRequest(string Token, string NewPassword);
+
+public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
+
+public sealed record DeleteAccountRequest(string? Password);
+
+/// <summary>Absent fields are left unchanged (merge semantics, Doc 02 §8.3).</summary>
+public sealed record PreferencesUpdate(ThemePreference? Theme, bool? AiAutoSummary, bool? AiTagSuggestions, bool? OnboardingDismissed);
+
+public sealed record UpdateMeRequest(string? DisplayName, PreferencesUpdate? Preferences);

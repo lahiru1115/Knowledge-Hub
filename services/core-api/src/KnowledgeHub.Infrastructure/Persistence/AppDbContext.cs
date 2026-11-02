@@ -14,6 +14,7 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<User> Users => Set<User>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
     private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web)
     {
@@ -52,6 +53,16 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
             e.HasIndex(x => x.TokenHash).IsUnique();
             e.HasIndex(x => x.UserId);
             e.HasIndex(x => x.FamilyId);
+            e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PasswordResetToken>(e =>
+        {
+            e.ToTable("password_reset_tokens");
+            e.HasKey(x => x.Id);
+            e.Property(x => x.TokenHash).HasMaxLength(64);
+            e.HasIndex(x => x.TokenHash).IsUnique();
+            e.HasIndex(x => x.UserId);
             e.HasOne<User>().WithMany().HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
         });
 
