@@ -1,0 +1,6 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <ItemGroup>
+    <ProjectReference Include="../KnowledgeHub.Domain/KnowledgeHub.Domain.csproj" />
+    <PackageReference Include="FluentValidation" />
+  </ItemGroup>
+</Project>
