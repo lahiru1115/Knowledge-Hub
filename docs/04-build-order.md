@@ -3,14 +3,55 @@
 | | |
 |---|---|
 | **Document** | 04 — Build order |
-| **Version** | 0.1 (draft) |
-| **Date** | 2026-11-02 |
-| **Status** | Draft for review |
+| **Version** | 1.0 |
+| **Date** | 2026-11-03 |
+| **Status** | All stages built; see "Where things stand" |
 | **Companion documents** | [01 — SRS](01-software-requirements-specification.md) · [02 — System architecture](02-system-architecture.md) · [03 — UI/UX design plan](03-ui-ux-design-plan.md) |
 
 The order follows the dependencies in Doc 02 and the priorities in Doc 01 (**M**ust, **S**hould, **C**ould). Each stage ends with something that runs and can be demonstrated. Do Must items first; Should and Could items are grouped at the end of the stage that needs them, and can be postponed without blocking later stages.
 
 Rule for every stage: if it adds or changes an endpoint, update `contracts/openapi.yaml` first (ADR-005), then build.
+
+## Where things stand
+
+Every stage below is built. The per-stage **Status** paragraphs say what was checked and what was not; this is the
+summary.
+
+**Checked here, against a real PostgreSQL and the real services:** Core API 678 tests (unit and integration), AI service
+311, web 295, browser 48 (with axe accessibility checks), contract fuzzing with Schemathesis (clean), the contract and
+the route table kept in step by a test, a latency check on 10,000 resources (p95 under 80 ms), the initial JavaScript
+budget (146 KB of 250 KB), and dependency audits. Most rules were also checked by breaking them on purpose and seeing a
+test fail.
+
+**Code review (after Stage 7).** A review of the whole branch found ten problems; each was reproduced with a test where
+possible, then fixed:
+
+| Problem | Fix |
+|---|---|
+| An AI outage stopped the metadata fetch, because one failing outbox handler stopped the others for the same message | Every handler runs; the failures are raised together |
+| Two index jobs for one resource could run side by side, and the older text could win | Messages for one resource run in order; others still run in parallel |
+| Unknown-email sign-ins took about twice as long (a second Argon2 run), revealing which emails have accounts | The decoy hash is made once per process |
+| Two tabs refreshing at once looked like a stolen token and ended every session | The web client refreshes under a cross-tab Web Lock (the server rule FR-AUTH-04 is unchanged) |
+| Two saves creating the same new tag at once: one failed with a 500 | Tags are created with `ON CONFLICT DO NOTHING` and read back |
+| Bulk tagging could take a resource past 20 tags | Refused with a 400, before anything changes |
+| Paid AI calls started together could all pass the daily cost cap | Each reservation holds an estimated cost, and the cap is checked under one lock per user |
+| Caddy was not on the API's network in the deployment compose file | Fixed |
+| `index.html` could be cached on app paths after a deploy | `no-cache` on every path except hashed assets |
+| Account deletion relied on the order of database cascades | Resources are deleted first (it worked, but by chance) |
+
+Smaller ones fixed at the same time: one resource that cannot be re-embedded no longer stops the others, the duplicate
+check keeps query parts without a name (`?abc`), a duplicated helper is gone, and the outbox backlog gauge is read every
+15 seconds instead of every pass.
+
+**Not checked:** the real embedding and chat models (they never ran here), the paid Claude and Voyage APIs, the search and
+chat quality measurements (5.8), Docker image builds, the deployment workflow, and anything on real hosting.
+
+**Open before the demo:** re-read the free-tier terms on the day (checklist in `infra/deploy/README.md`), confirm chat
+streams end to end on the VM, set up Brevo with SPF and DKIM, and confirm pgvector 0.8+. OI-08 (Oracle Pay As You Go and
+idle reclaim) is unanswered; the plan does not depend on it.
+
+**Not built (Could):** saved views (FR-SRCH-05) and OAuth sign-in (FR-AUTH-10). They are in the contract and listed as not
+built in `ContractDriftTests`.
 
 ## Stage 0 — Foundation (done)
 

@@ -1,25 +1,84 @@
 # Knowledge Hub
 
-Personal knowledge library with AI-assisted summaries, tagging, semantic search and "Ask your library".
+A personal knowledge library: save links, organise them in collections and tags, find them again with keyword and
+semantic search, and ask questions answered from your own library with citations. AI summaries and tag suggestions are
+optional and run free by default (local models), with a paid Claude profile that has cost caps.
+
+The design is in `docs/`: requirements ([01](docs/01-software-requirements-specification.md)), architecture
+([02](docs/02-system-architecture.md)), UI/UX ([03](docs/03-ui-ux-design-plan.md)), the build order with the status of
+every stage ([04](docs/04-build-order.md)), and the decision records in [`docs/adr/`](docs/adr/README.md).
+
+## What is where
 
 | Path | Contents |
 |---|---|
-| `docs/` | SRS (01), architecture (02), UI/UX plan (03); `docs/adr/` decision records |
-| `contracts/` | `openapi.yaml`, the API source of truth (write it before any endpoint) |
-| `apps/web/` | React + Vite SPA |
-| `services/core-api/` | .NET 10 Core API |
-| `services/ai-service/` | FastAPI AI service |
-| `infra/` | Database init script, demo deployment files |
-| `plans/` | Planning documents |
+| `contracts/openapi.yaml` | The API contract, written before each endpoint. The web client is generated from it; CI fuzzes the API against it. |
+| `apps/web/` | React 19 + Vite + TypeScript single-page app (TanStack Router and Query, shadcn/ui, Tailwind). |
+| `services/core-api/` | .NET 10 Core API: identity, library, search, export, admin, outbox worker. PostgreSQL schema `core`. |
+| `services/ai-service/` | FastAPI AI service: indexing, hybrid search, summaries, tag suggestions, chat. PostgreSQL schema `ai` with pgvector. |
+| `infra/db/` | `init.sql` (roles and schemas) and a check that the roles stay apart. |
+| `infra/deploy/` | Demo deployment on one VM: compose file, Caddy, env template, runbook. |
+| `.github/workflows/` | CI for each part, contract fuzzing, security audits, deployment. |
 
-Local infrastructure: `cp .env.example .env && docker compose up`. Application services are added as they are built.
+## Run it locally
 
-## Web app
+You need PostgreSQL 16+ with pgvector, the .NET 10 SDK, Node 22 and `uv`. `docker compose up -d postgres migrate-core`
+starts the database with the roles from `infra/db/init.sql` and the Core API's tables. The compose file has no
+application services yet, so the apps run from their folders:
+
+```bash
+cp .env.example .env    # local defaults; read the comments
+```
+
+**Core API** (http://localhost:8080):
+
+```bash
+cd services/core-api
+ConnectionStrings__Core="Host=localhost;Database=knowledge_hub;Username=core_app;Password=core_app_dev" \
+Auth__SigningKey="a-local-signing-key-of-at-least-32-bytes" Auth__SecureCookies=false \
+ASPNETCORE_URLS=http://localhost:8080 dotnet run --project src/KnowledgeHub.Api
+```
+
+**AI service** (optional; the app works without it and says so; http://localhost:8000):
+
+```bash
+cd services/ai-service
+AI_MIGRATOR_DATABASE_URL=postgresql://ai_migrator:ai_migrator_dev@localhost:5432/knowledge_hub uv run alembic upgrade head
+AI_DATABASE_URL=postgresql://ai_app:ai_app_dev@localhost:5432/knowledge_hub SERVICE_JWT_SECRET=<same as AiService__JwtSecret> \
+  uv run uvicorn app.main:create_app --factory --port 8000
+```
+
+Then start the Core API with `AiService__Enabled=true` and `AiService__JwtSecret` set to the same secret. Chat needs
+Ollama with a model (`ollama pull llama3.2:3b`); summaries and tag suggestions do not.
+
+**Web app** (http://localhost:5173; it proxies `/api` to the Core API):
 
 ```bash
 cd apps/web
 npm ci
-npm run dev        # http://localhost:5173, proxies /api to the Core API on :8080
-npm test           # unit and component tests
-npm run e2e        # browser tests; see apps/web/e2e/README.md
+npm run dev
 ```
+
+Password reset emails go to the SMTP server in `Smtp__Host`/`Smtp__Port` (Mailpit in `compose.yaml`).
+
+## Tests
+
+| Part | Command | Needs |
+|---|---|---|
+| Core API | `dotnet test` in `services/core-api` | PostgreSQL: set `KH_TEST_MIGRATOR_CONNECTION` and `KH_TEST_APP_CONNECTION`, or let Testcontainers start one |
+| AI service | `uv run pytest` in `services/ai-service` | PostgreSQL with the `ai` schema migrated (`AI_TEST_APP_URL`, `AI_TEST_MIGRATOR_URL`) |
+| Web | `npm test` in `apps/web` | nothing |
+| Browser | `npm run e2e` in `apps/web` | the running stack; see `apps/web/e2e/README.md` |
+| Contract | `contracts/run-schemathesis.sh` | a running Core API with raised rate limits |
+| Latency | `uv run --with httpx perf/load.py` in `services/core-api` | a running Core API; see `perf/README.md` |
+
+## Status
+
+All seven stages of the build order are done as code; [Doc 04](docs/04-build-order.md) has the detail. In short:
+
+- **Verified here:** every test suite above, against a real PostgreSQL and the real API. That includes 48 browser tests
+  with accessibility checks, contract fuzzing, and a latency check on 10,000 resources.
+- **Not verified:** the real AI models (the embedding model and chat model never ran here), the paid Claude and
+  Voyage APIs, Docker builds, the deployment, and anything on real hosting. The evaluation harness for search and chat
+  quality exists but has not been run.
+- **Not built (Could):** saved views and sign-in with OAuth. They are in the contract and listed as not built.
