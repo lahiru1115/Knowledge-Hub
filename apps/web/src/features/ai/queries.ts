@@ -37,6 +37,7 @@ export function useAi() {
     chatAvailable: status.data?.available === true && status.data.chat_available === true,
     profile: status.data?.profile,
     loading: status.isPending,
+    refetch: () => status.refetch(),
     autoSummary: me.data?.preferences.ai_auto_summary ?? true,
     tagSuggestions: me.data?.preferences.ai_tag_suggestions ?? true,
   }

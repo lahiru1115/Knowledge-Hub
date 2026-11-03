@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router'
-import { Home, Library, Plus, Folders } from 'lucide-react'
+import { Home, Library, MessagesSquare, Plus, Folders } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useQuickAdd } from '@/features/library/QuickAdd'
 
@@ -32,6 +32,10 @@ export function MobileNav() {
         <Link to="/library" className={tab} activeProps={active}>
           <Library className="size-5" aria-hidden="true" />
           Library
+        </Link>
+        <Link to="/ask" className={tab} activeProps={active}>
+          <MessagesSquare className="size-5" aria-hidden="true" />
+          Ask
         </Link>
         <Link to="/collections" className={tab} activeProps={active}>
           <Folders className="size-5" aria-hidden="true" />

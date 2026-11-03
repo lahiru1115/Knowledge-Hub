@@ -143,6 +143,7 @@ function PreviewCard({ url, current }: { url: string; current: string }) {
   if (preview.isPending)
     return (
       <div
+        role="status"
         aria-busy="true"
         aria-label="Loading a preview"
         className="flex gap-3 rounded-md border border-border p-3"

@@ -13,3 +13,10 @@ migrate-core`).
 4. `npm run e2e` from `apps/web` (Playwright starts the Vite dev server).
 5. Leave the outbox worker on (the default). Two tests rely on it: one saves a link to a private address and
    expects the server to refuse it, the other saves an unreachable host. Neither needs the internet.
+6. The AI states: `ai-unavailable.spec.ts` runs against the stack above, where the AI service is off. `ai.spec.ts` needs
+   the AI service too and is skipped unless `E2E_AI=1`. Start the AI service (`uv run uvicorn app.main:create_app
+--factory --port 8000` in `services/ai-service`, after `alembic upgrade head`), and the Core API with
+   `AiService__Enabled=true`, `AiService__JwtSecret` equal to the AI service's `SERVICE_JWT_SECRET`, and
+   `Outbox__Enabled=false` (without the embedding model, background indexing would fail and open the circuit
+   breaker). Summaries and tag suggestions need no model; semantic search and Ask show their unavailable behaviour
+   unless the models are installed.

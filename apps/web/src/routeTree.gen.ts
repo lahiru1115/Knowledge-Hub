@@ -15,12 +15,16 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAskRouteImport } from './routes/_app/ask'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTagsRouteImport } from './routes/_app/tags'
+import { Route as AppAskIndexRouteImport } from './routes/_app/ask.index'
+import { Route as AppAskSessionIdRouteImport } from './routes/_app/ask.$sessionId'
 import { Route as AppCollectionsIndexRouteImport } from './routes/_app/collections.index'
 import { Route as AppCollectionsIdRouteImport } from './routes/_app/collections.$id'
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
+import { Route as AppSettingsAiRouteImport } from './routes/_app/settings/ai'
 import { Route as AppSettingsAppearanceRouteImport } from './routes/_app/settings/appearance'
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
 import { Route as AppSettingsAccountIndexRouteImport } from './routes/_app/settings/account.index'
@@ -55,6 +59,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAskRoute = AppAskRouteImport.update({
+  id: '/ask',
+  path: '/ask',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppLibraryRoute = AppLibraryRouteImport.update({
   id: '/library',
   path: '/library',
@@ -70,6 +79,16 @@ const AppTagsRoute = AppTagsRouteImport.update({
   path: '/tags',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAskIndexRoute = AppAskIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAskRoute,
+} as any)
+const AppAskSessionIdRoute = AppAskSessionIdRouteImport.update({
+  id: '/$sessionId',
+  path: '/$sessionId',
+  getParentRoute: () => AppAskRoute,
+} as any)
 const AppCollectionsIndexRoute = AppCollectionsIndexRouteImport.update({
   id: '/collections/',
   path: '/collections/',
@@ -83,6 +102,11 @@ const AppCollectionsIdRoute = AppCollectionsIdRouteImport.update({
 const AppSettingsIndexRoute = AppSettingsIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
+const AppSettingsAiRoute = AppSettingsAiRouteImport.update({
+  id: '/ai',
+  path: '/ai',
   getParentRoute: () => AppSettingsRoute,
 } as any)
 const AppSettingsAppearanceRoute = AppSettingsAppearanceRouteImport.update({
@@ -113,12 +137,16 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/ask': typeof AppAskRouteWithChildren
   '/library': typeof AppLibraryRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/tags': typeof AppTagsRoute
+  '/ask/$sessionId': typeof AppAskSessionIdRoute
   '/collections/$id': typeof AppCollectionsIdRoute
+  '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/ask/': typeof AppAskIndexRoute
   '/collections/': typeof AppCollectionsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
   '/settings/account/delete': typeof AppSettingsAccountDeleteRoute
@@ -132,9 +160,12 @@ export interface FileRoutesByTo {
   '/library': typeof AppLibraryRoute
   '/tags': typeof AppTagsRoute
   '/': typeof AppIndexRoute
+  '/ask/$sessionId': typeof AppAskSessionIdRoute
   '/collections/$id': typeof AppCollectionsIdRoute
+  '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/ask': typeof AppAskIndexRoute
   '/collections': typeof AppCollectionsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
   '/settings/account/delete': typeof AppSettingsAccountDeleteRoute
@@ -147,13 +178,17 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/ask': typeof AppAskRouteWithChildren
   '/_app/library': typeof AppLibraryRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/tags': typeof AppTagsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/ask/$sessionId': typeof AppAskSessionIdRoute
   '/_app/collections/$id': typeof AppCollectionsIdRoute
+  '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
   '/_app/settings/profile': typeof AppSettingsProfileRoute
+  '/_app/ask/': typeof AppAskIndexRoute
   '/_app/collections/': typeof AppCollectionsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
   '/_app/settings/account/delete': typeof AppSettingsAccountDeleteRoute
@@ -167,12 +202,16 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/ask'
     | '/library'
     | '/settings'
     | '/tags'
+    | '/ask/$sessionId'
     | '/collections/$id'
+    | '/settings/ai'
     | '/settings/appearance'
     | '/settings/profile'
+    | '/ask/'
     | '/collections/'
     | '/settings/'
     | '/settings/account/delete'
@@ -186,9 +225,12 @@ export interface FileRouteTypes {
     | '/library'
     | '/tags'
     | '/'
+    | '/ask/$sessionId'
     | '/collections/$id'
+    | '/settings/ai'
     | '/settings/appearance'
     | '/settings/profile'
+    | '/ask'
     | '/collections'
     | '/settings'
     | '/settings/account/delete'
@@ -200,13 +242,17 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_app/ask'
     | '/_app/library'
     | '/_app/settings'
     | '/_app/tags'
     | '/_app/'
+    | '/_app/ask/$sessionId'
     | '/_app/collections/$id'
+    | '/_app/settings/ai'
     | '/_app/settings/appearance'
     | '/_app/settings/profile'
+    | '/_app/ask/'
     | '/_app/collections/'
     | '/_app/settings/'
     | '/_app/settings/account/delete'
@@ -265,6 +311,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ask': {
+      id: '/_app/ask'
+      path: '/ask'
+      fullPath: '/ask'
+      preLoaderRoute: typeof AppAskRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/library': {
       id: '/_app/library'
       path: '/library'
@@ -286,6 +339,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppTagsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/ask/': {
+      id: '/_app/ask/'
+      path: '/'
+      fullPath: '/ask/'
+      preLoaderRoute: typeof AppAskIndexRouteImport
+      parentRoute: typeof AppAskRoute
+    }
+    '/_app/ask/$sessionId': {
+      id: '/_app/ask/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/ask/$sessionId'
+      preLoaderRoute: typeof AppAskSessionIdRouteImport
+      parentRoute: typeof AppAskRoute
+    }
     '/_app/collections/': {
       id: '/_app/collections/'
       path: '/collections'
@@ -305,6 +372,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/settings/'
       preLoaderRoute: typeof AppSettingsIndexRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
+    '/_app/settings/ai': {
+      id: '/_app/settings/ai'
+      path: '/ai'
+      fullPath: '/settings/ai'
+      preLoaderRoute: typeof AppSettingsAiRouteImport
       parentRoute: typeof AppSettingsRoute
     }
     '/_app/settings/appearance': {
@@ -338,7 +412,21 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAskRouteChildren {
+  AppAskSessionIdRoute: typeof AppAskSessionIdRoute
+  AppAskIndexRoute: typeof AppAskIndexRoute
+}
+
+const AppAskRouteChildren: AppAskRouteChildren = {
+  AppAskSessionIdRoute: AppAskSessionIdRoute,
+  AppAskIndexRoute: AppAskIndexRoute,
+}
+
+const AppAskRouteWithChildren =
+  AppAskRoute._addFileChildren(AppAskRouteChildren)
+
 interface AppSettingsRouteChildren {
+  AppSettingsAiRoute: typeof AppSettingsAiRoute
   AppSettingsAppearanceRoute: typeof AppSettingsAppearanceRoute
   AppSettingsProfileRoute: typeof AppSettingsProfileRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
@@ -347,6 +435,7 @@ interface AppSettingsRouteChildren {
 }
 
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
+  AppSettingsAiRoute: AppSettingsAiRoute,
   AppSettingsAppearanceRoute: AppSettingsAppearanceRoute,
   AppSettingsProfileRoute: AppSettingsProfileRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
@@ -359,6 +448,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAskRoute: typeof AppAskRouteWithChildren
   AppLibraryRoute: typeof AppLibraryRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
   AppTagsRoute: typeof AppTagsRoute
@@ -368,6 +458,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAskRoute: AppAskRouteWithChildren,
   AppLibraryRoute: AppLibraryRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,
   AppTagsRoute: AppTagsRoute,

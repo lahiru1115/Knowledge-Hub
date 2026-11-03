@@ -11,7 +11,7 @@ const car = () =>
     metadata_status: 'ready',
   })
 
-async function setup(
+function setup(
   path = '/library',
   configure?: (db: ReturnType<typeof fakeApi>) => void,
   resources = [car()],
@@ -25,7 +25,7 @@ async function setup(
 
 describe('searching by meaning', () => {
   it('switches mode, waits for Enter, and shows the matching passage with the AI mark', async () => {
-    const { db, u } = await setup()
+    const { db, u } = setup()
     await screen.findByRole('button', { name: 'Weekend notes' })
 
     await u.click(screen.getByRole('radio', { name: /Semantic/ }))
@@ -48,7 +48,7 @@ describe('searching by meaning', () => {
   })
 
   it('keeps the mode and query in the URL, so a reload or a bookmark returns to the same search', async () => {
-    const { db, router } = await setup('/library?mode=semantic&q=automobile')
+    const { db, router } = setup('/library?mode=semantic&q=automobile')
     expect(await screen.findByText(/…Washing the automobile…/)).toBeInTheDocument()
     expect(router.state.location.search).toMatchObject({ mode: 'semantic', q: 'automobile' })
     expect(db.all('GET', '/resources')).toHaveLength(0) // the keyword list is not fetched in this mode
@@ -62,7 +62,7 @@ describe('searching by meaning', () => {
       description: 'Weekend notes about the automobile',
       metadata_status: 'ready',
     })
-    const { u, router } = await setup('/library?mode=semantic&q=weekend', undefined, [both])
+    const { u, router } = setup('/library?mode=semantic&q=weekend', undefined, [both])
     await screen.findByText(/Matching passage:/)
     await u.click(screen.getByRole('radio', { name: 'Keyword' }))
     await waitFor(() => {
@@ -74,7 +74,7 @@ describe('searching by meaning', () => {
   })
 
   it('says so, and offers keyword search, when nothing matches', async () => {
-    const { u } = await setup('/library?mode=semantic&q=zebra')
+    const { u } = setup('/library?mode=semantic&q=zebra')
     expect(
       await screen.findByText(/Nothing in your library matches ‘zebra’ by meaning\./),
     ).toBeInTheDocument()
@@ -85,7 +85,7 @@ describe('searching by meaning', () => {
   })
 
   it('opens the drawer from a result', async () => {
-    const { u, router } = await setup('/library?mode=semantic&q=automobile')
+    const { u, router } = setup('/library?mode=semantic&q=automobile')
     await u.click(await screen.findByRole('button', { name: 'Weekend notes' }))
     await waitFor(() => {
       expect(router.state.location.search).toHaveProperty('r')
@@ -95,7 +95,7 @@ describe('searching by meaning', () => {
 
 describe('when the AI service is not available', () => {
   it('disables the Semantic option with the reason', async () => {
-    await setup('/library', (db) => {
+    setup('/library', (db) => {
       db.ai.down = true
     })
     const option = await screen.findByRole('radio', { name: /Semantic/ })
@@ -106,7 +106,7 @@ describe('when the AI service is not available', () => {
   })
 
   it('shows keyword results with a banner if the search was already by meaning', async () => {
-    await setup('/library?mode=semantic&q=weekend', (db) => {
+    setup('/library?mode=semantic&q=weekend', (db) => {
       db.ai.down = true
     })
     expect(
@@ -117,7 +117,7 @@ describe('when the AI service is not available', () => {
   })
 
   it('reports the daily limit with its reset time, not a generic error', async () => {
-    await setup('/library?mode=semantic&q=anything', (db) => {
+    setup('/library?mode=semantic&q=anything', (db) => {
       db.failNext('GET', '/search/semantic', 429, 'ai_quota_exceeded', {
         reset_at: new Date(Date.now() + 2 * 3600_000 + 60_000).toISOString(),
       })
@@ -131,7 +131,7 @@ describe('when the AI service is not available', () => {
 
 describe('"Search by meaning instead"', () => {
   it('is offered when a keyword search finds nothing, and runs the same query', async () => {
-    const { db, u, router } = await setup('/library?q=automobile-xyz')
+    const { db, u, router } = setup('/library?q=automobile-xyz')
     await u.click(await screen.findByRole('button', { name: /Search by meaning instead/ }))
     await waitFor(() => {
       expect(router.state.location.search).toMatchObject({ mode: 'semantic', q: 'automobile-xyz' })
@@ -142,7 +142,7 @@ describe('"Search by meaning instead"', () => {
   })
 
   it('is not offered while the AI service is down', async () => {
-    await setup('/library?q=nothing-here', (db) => {
+    setup('/library?q=nothing-here', (db) => {
       db.ai.down = true
     })
     expect(await screen.findByText(/Nothing matches 'nothing-here'/)).toBeInTheDocument()

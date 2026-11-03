@@ -7,6 +7,7 @@ import {
 } from '@/features/library/librarySearch'
 import { plural, siteOf, timeAgo } from './format'
 import { parseSearch, stringifySearch } from './searchParams'
+import { parseSse, readSse } from './sse'
 
 describe('search params', () => {
   it('writes readable URLs: repeated keys for lists, plain values otherwise', () => {
@@ -120,5 +121,44 @@ describe('normalizeTag (same rules as the server)', () => {
 
   it('accepts exactly 50 characters', () => {
     expect(normalizeTag('a'.repeat(50))).toBe('a'.repeat(50))
+  })
+})
+
+describe('parseSse', () => {
+  it('returns complete events and keeps the unfinished one', () => {
+    const { events, rest } = parseSse(
+      'event: token\ndata: {"text":"Hi"}\n\nevent: token\ndata: {"te',
+    )
+    expect(events).toEqual([{ event: 'token', data: { text: 'Hi' } }])
+    expect(rest).toBe('event: token\ndata: {"te')
+  })
+
+  it('skips comment lines and events that are not JSON, and accepts CRLF', () => {
+    const { events } = parseSse(
+      ': keep-alive\n\nevent: x\ndata: not json\n\r\n\r\nevent: done\r\ndata: {"a":1}\r\n\r\n',
+    )
+    expect(events).toEqual([{ event: 'done', data: { a: 1 } }])
+  })
+
+  it('treats an event with no name as "message"', () => {
+    expect(parseSse('data: {"a":1}\n\n').events).toEqual([{ event: 'message', data: { a: 1 } }])
+  })
+
+  it('reads a stream that arrives in awkward pieces, including a multi-byte character split across chunks', async () => {
+    const bytes = new TextEncoder().encode(
+      'event: token\ndata: {"text":"café ✨"}\n\nevent: done\ndata: {"ok":true}\n\n',
+    )
+    const stream = new ReadableStream<Uint8Array>({
+      start(c) {
+        for (let i = 0; i < bytes.length; i += 7) c.enqueue(bytes.slice(i, i + 7))
+        c.close()
+      },
+    })
+    const seen: unknown[] = []
+    await readSse(stream, (e) => seen.push(e))
+    expect(seen).toEqual([
+      { event: 'token', data: { text: 'café ✨' } },
+      { event: 'done', data: { ok: true } },
+    ])
   })
 })

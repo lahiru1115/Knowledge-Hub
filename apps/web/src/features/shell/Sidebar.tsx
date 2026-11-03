@@ -1,6 +1,15 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { FolderOpen, Hash, Home, Inbox, Library, Plus, Settings } from 'lucide-react'
+import {
+  FolderOpen,
+  Hash,
+  Home,
+  Inbox,
+  Library,
+  MessagesSquare,
+  Plus,
+  Settings,
+} from 'lucide-react'
 import { useState } from 'react'
 import { CollectionDialog } from '@/features/collections/CollectionDialog'
 import { collectionsQuery, tagsQuery } from '@/features/library/queries'
@@ -44,6 +53,9 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         </Link>
         <Link to="/library" className={item} activeProps={active}>
           <Library className="size-4" aria-hidden="true" /> {label('Library')}
+        </Link>
+        <Link to="/ask" className={item} activeProps={active}>
+          <MessagesSquare className="size-4" aria-hidden="true" /> {label('Ask')}
         </Link>
       </div>
 

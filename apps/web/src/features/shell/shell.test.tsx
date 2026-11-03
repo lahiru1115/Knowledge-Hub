@@ -169,7 +169,7 @@ describe('app shell', () => {
       within(tabs)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['Home', 'Library', 'Collections'])
+    ).toEqual(['Home', 'Library', 'Ask', 'Collections'])
     const u = userEvent.setup()
     await u.click(screen.getByRole('button', { name: 'Add resource' }))
     expect(await screen.findByRole('dialog', { name: 'Add a resource' })).toBeInTheDocument()

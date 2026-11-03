@@ -40,6 +40,7 @@ export function SuggestedTags({ resourceId, url, current, enabled, onAccept }: P
   if (q.isPending)
     return (
       <div
+        role="status"
         aria-busy="true"
         aria-label="Loading tag suggestions"
         className="flex items-center gap-2"
