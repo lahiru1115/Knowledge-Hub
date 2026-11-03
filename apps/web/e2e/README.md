@@ -13,7 +13,10 @@ migrate-core`).
 4. `npm run e2e` from `apps/web` (Playwright starts the Vite dev server).
 5. Leave the outbox worker on (the default). Two tests rely on it: one saves a link to a private address and
    expects the server to refuse it, the other saves an unreachable host. Neither needs the internet.
-6. The AI states: `ai-unavailable.spec.ts` runs against the stack above, where the AI service is off. `ai.spec.ts` needs
+6. The admin tests need the API to treat `e2e-admin@example.com` as the administrator: start it with
+   `Auth__AdminEmail=e2e-admin@example.com`, or set `E2E_ADMIN_EMAIL` to another address you have configured.
+   The first run registers that account; later runs sign in to it.
+7. The AI states: `ai-unavailable.spec.ts` runs against the stack above, where the AI service is off. `ai.spec.ts` needs
    the AI service too and is skipped unless `E2E_AI=1`. Start the AI service (`uv run uvicorn app.main:create_app
 --factory --port 8000` in `services/ai-service`, after `alembic upgrade head`), and the Core API with
    `AiService__Enabled=true`, `AiService__JwtSecret` equal to the AI service's `SERVICE_JWT_SECRET`, and
