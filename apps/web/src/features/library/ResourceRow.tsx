@@ -28,6 +28,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { siteOf, timeAgo } from '@/lib/format'
+import { AiMark } from '@/features/ai/AiMark'
 import { FetchStatus } from './FetchStatus'
 import { typeLabel, type Resource, type ResourceType } from './types'
 
@@ -62,6 +63,10 @@ interface Props {
   active: boolean
   onSelect: (r: Resource, selected: boolean) => void
   actions: RowActions
+  /** The part of the page that matched, for a search by meaning. Shown with the ✦ mark. */
+  snippet?: string
+  /** Semantic results are not selectable for bulk actions (they are a ranked answer, not a list to edit). */
+  selectable?: boolean
 }
 
 /** One resource in the list (Doc 03 §5.2): select box, title and details, tags, quick favourite and a menu. */
@@ -72,6 +77,8 @@ export function ResourceRow({
   active,
   onSelect,
   actions,
+  snippet,
+  selectable = true,
 }: Props) {
   const title = r.title ?? r.url
   return (
@@ -83,14 +90,16 @@ export function ResourceRow({
         selected && 'bg-accent',
       )}
     >
-      <Checkbox
-        className="mt-1"
-        aria-label={`Select ${title}`}
-        checked={selected}
-        onCheckedChange={(c) => {
-          onSelect(r, c === true)
-        }}
-      />
+      {selectable && (
+        <Checkbox
+          className="mt-1"
+          aria-label={`Select ${title}`}
+          checked={selected}
+          onCheckedChange={(c) => {
+            onSelect(r, c === true)
+          }}
+        />
+      )}
       <div className="min-w-0 flex-1">
         <button
           type="button"
@@ -108,6 +117,12 @@ export function ResourceRow({
           {r.is_archived && ' · Archived'}
         </p>
         <FetchStatus resource={r} className="mt-1" />
+        {snippet && (
+          <p className="mt-1 line-clamp-2 text-sm">
+            <AiMark /> <span className="sr-only">Matching passage: </span>
+            {snippet}
+          </p>
+        )}
         {r.description && <p className="mt-1 line-clamp-2 text-sm">{r.description}</p>}
         <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1">
           {r.tags.length > 0 && (

@@ -29,6 +29,15 @@ export const resourceQuery = (id: string) =>
       fetchPollInterval(query.state.data ? [query.state.data] : undefined),
   })
 
+export const semanticQuery = (q: string, pageSize: number) =>
+  queryOptions({
+    queryKey: ['semantic', q, pageSize] as const,
+    queryFn: () =>
+      unwrap(api.GET('/search/semantic', { params: { query: { q, page_size: pageSize } } })),
+    retry: false,
+    staleTime: 60_000,
+  })
+
 export const collectionsQuery = queryOptions({
   queryKey: keys.collections,
   queryFn: () => unwrap(api.GET('/collections')),

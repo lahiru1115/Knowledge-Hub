@@ -77,9 +77,39 @@ export interface FakeDb {
   preview: (url: string) => Preview
   /** Updates a resource as the background job would, without touching updated_at. */
   finishMetadata: (id: string, patch?: Partial<Resource>) => void
+  ai: FakeAi
 }
 
 export type Preview = components['schemas']['MetadataPreview']
+type ChatSession = components['schemas']['ChatSession']
+type ChatMessage = components['schemas']['ChatMessage']
+type Citation = components['schemas']['Citation']
+
+/** What the fake AI service does when a question is asked. */
+export interface FakeAnswer {
+  tokens: string[]
+  citations?: Citation[]
+  /** Ends the stream with an `error` event instead of `done`. */
+  error?: string
+  /** After the tokens, keep the stream open (until the browser aborts it). */
+  hang?: boolean
+}
+
+/** The AI service as the web app sees it. `down` makes every AI endpoint answer 503 and the status say unavailable. */
+export interface FakeAi {
+  down: boolean
+  profile: 'free' | 'claude'
+  chatAvailable: boolean
+  /** The summary the next request produces; 'thin' answers 422 not_enough_content. */
+  summary: (r: Resource) => { summary: string; source: 'ai' | 'extracted' } | 'thin'
+  tags: (body: { url?: string; resource_id?: string }) => { name: string; existing: boolean }[]
+  related: (id: string) => Resource[]
+  semantic: (q: string) => { resource: Resource; snippet: string; score: number }[]
+  usage: { items: { operation: string; used: number; limit: number | null }[]; reset_at: string }
+  answer: (question: string, session: ChatSession) => FakeAnswer
+  sessions: ChatSession[]
+  messages: Record<string, ChatMessage[]>
+}
 
 /**
  * A small stateful stand-in for the library API: it filters, sorts and pages like the real one, applies edits, keeps a
@@ -102,6 +132,45 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       type: 'article',
       error: null,
     }),
+    ai: {
+      down: false,
+      profile: 'free',
+      chatAvailable: true,
+      summary: (r) => ({ summary: `A summary of ${r.title ?? r.url}.`, source: 'extracted' }),
+      tags: () => [
+        { name: 'postgres', existing: true },
+        { name: 'pooling', existing: false },
+      ],
+      related: () => [],
+      semantic: (q) =>
+        db.resources
+          .filter(
+            (r) =>
+              !r.is_archived &&
+              q
+                .split(/\s+/)
+                .some((w) =>
+                  (r.description ?? r.title ?? '').toLowerCase().includes(w.toLowerCase()),
+                ),
+          )
+          .map((r) => ({
+            resource: r,
+            snippet: `…${r.description ?? r.title ?? ''}…`,
+            score: 0.03,
+          })),
+      usage: {
+        reset_at: new Date(Date.now() + 3 * 3600_000).toISOString(),
+        items: [
+          { operation: 'summarize', used: 4, limit: 300 },
+          { operation: 'suggest_tags', used: 0, limit: 300 },
+          { operation: 'search', used: 2, limit: 500 },
+          { operation: 'chat', used: 1, limit: 100 },
+        ],
+      },
+      answer: () => ({ tokens: ['Pooling keeps connections open ', '[1].'], citations: [] }),
+      sessions: [],
+      messages: {},
+    },
     finishMetadata: (id, patch = {}) => {
       const r = find(id)
       if (r) replace({ ...r, metadata_status: 'ready', metadata_error: null, ...patch })
@@ -224,6 +293,182 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       const next = { ...r, metadata_status: 'pending' as const, metadata_error: null }
       replace(next)
       return HttpResponse.json(next, { status: 202 })
+    }),
+    // ---- AI ----
+    http.get(`${API}/ai/status`, async ({ request }) => {
+      await record(request, '/ai/status')
+      const { ai } = db
+      return HttpResponse.json({
+        available: !ai.down,
+        profile: ai.profile,
+        chat_available: !ai.down && ai.chatAvailable,
+      })
+    }),
+    http.get(`${API}/me/ai-usage`, async ({ request }) => {
+      await record(request, '/me/ai-usage')
+      const f = failure('GET', '/me/ai-usage')
+      if (f) return f
+      return db.ai.down ? problem(503, 'ai_unavailable') : HttpResponse.json(db.ai.usage)
+    }),
+    http.post(`${API}/resources/:id/summary`, async ({ request, params }) => {
+      await record(request, '/resources/:id/summary')
+      const f = failure('POST', '/resources/:id/summary')
+      if (f) return f
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      const r = find(String(params.id))
+      if (!r) return problem(404, 'not_found')
+      const made = db.ai.summary(r)
+      if (made === 'thin') return problem(422, 'not_enough_content')
+      const next = touch({ ...r, summary: made.summary, summary_source: made.source })
+      replace(next)
+      return HttpResponse.json(next)
+    }),
+    http.delete(`${API}/resources/:id/summary`, async ({ request, params }) => {
+      await record(request, '/resources/:id/summary')
+      const r = find(String(params.id))
+      if (!r) return problem(404, 'not_found')
+      replace(touch({ ...r, summary: null, summary_source: 'none' }))
+      return new HttpResponse(null, { status: 204 })
+    }),
+    http.post(`${API}/ai/tag-suggestions`, async ({ request }) => {
+      await record(request, '/ai/tag-suggestions')
+      const f = failure('POST', '/ai/tag-suggestions')
+      if (f) return f
+      if (db.ai.down) return HttpResponse.json({ items: [], ai_available: false })
+      const body = (await request.clone().json()) as { url?: string; resource_id?: string }
+      return HttpResponse.json({ items: db.ai.tags(body), ai_available: true })
+    }),
+    http.get(`${API}/resources/:id/related`, async ({ request, params }) => {
+      await record(request, '/resources/:id/related')
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      return HttpResponse.json({ items: db.ai.related(String(params.id)) })
+    }),
+    http.get(`${API}/search/semantic`, async ({ request }) => {
+      await record(request, '/search/semantic')
+      const f = failure('GET', '/search/semantic')
+      if (f) return f
+      const q = new URL(request.url).searchParams.get('q') ?? ''
+      if (db.ai.down) {
+        const items = db.resources
+          .filter((r) => (r.title ?? '').toLowerCase().includes(q.toLowerCase()))
+          .map((resource) => ({ resource, snippet: resource.description ?? '', score: 0 }))
+        return HttpResponse.json({
+          items,
+          page: 1,
+          page_size: 20,
+          total: items.length,
+          fallback: true,
+        })
+      }
+      const items = db.ai.semantic(q)
+      return HttpResponse.json({
+        items,
+        page: 1,
+        page_size: 20,
+        total: items.length,
+        fallback: false,
+      })
+    }),
+    http.get(`${API}/chat/sessions`, async ({ request }) => {
+      await record(request, '/chat/sessions')
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      return HttpResponse.json({ items: [...db.ai.sessions].reverse() })
+    }),
+    http.post(`${API}/chat/sessions`, async ({ request }) => {
+      await record(request, '/chat/sessions')
+      const f = failure('POST', '/chat/sessions')
+      if (f) return f
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      const body = (await request
+        .clone()
+        .json()
+        .catch(() => ({}))) as { scope_collection_id?: string | null }
+      const now = new Date().toISOString()
+      const session: ChatSession = {
+        id: `chat-${(db.ai.sessions.length + 1).toString().padStart(3, '0')}`,
+        title: 'New chat',
+        scope_collection_id: body.scope_collection_id ?? null,
+        created_at: now,
+        updated_at: now,
+      }
+      db.ai.sessions.push(session)
+      db.ai.messages[session.id] = []
+      return HttpResponse.json(session, { status: 201 })
+    }),
+    http.get(`${API}/chat/sessions/:id`, async ({ request, params }) => {
+      await record(request, '/chat/sessions/:id')
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      const session = db.ai.sessions.find((x) => x.id === params.id)
+      return session
+        ? HttpResponse.json({ ...session, messages: db.ai.messages[session.id] ?? [] })
+        : problem(404, 'not_found')
+    }),
+    http.patch(`${API}/chat/sessions/:id`, async ({ request, params }) => {
+      await record(request, '/chat/sessions/:id')
+      const session = db.ai.sessions.find((x) => x.id === params.id)
+      if (!session) return problem(404, 'not_found')
+      session.title = ((await request.clone().json()) as { title: string }).title
+      return HttpResponse.json(session)
+    }),
+    http.delete(`${API}/chat/sessions/:id`, async ({ request, params }) => {
+      await record(request, '/chat/sessions/:id')
+      db.ai.sessions = db.ai.sessions.filter((x) => x.id !== params.id)
+      return new HttpResponse(null, { status: 204 })
+    }),
+    http.post(`${API}/chat/sessions/:id/messages`, async ({ request, params }) => {
+      await record(request, '/chat/sessions/:id/messages')
+      const f = failure('POST', '/chat/sessions/:id/messages')
+      if (f) return f
+      if (db.ai.down) return problem(503, 'ai_unavailable')
+      const session = db.ai.sessions.find((x) => x.id === params.id)
+      if (!session) return problem(404, 'not_found')
+      const { content } = (await request.clone().json()) as { content: string }
+      const script = db.ai.answer(content, session)
+      const enc = new TextEncoder()
+      const send = (
+        c: ReadableStreamDefaultController<Uint8Array>,
+        event: string,
+        data: unknown,
+      ) => {
+        c.enqueue(enc.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`))
+      }
+      const stream = new ReadableStream<Uint8Array>({
+        async start(c) {
+          for (const text of script.tokens) {
+            send(c, 'token', { text })
+            await new Promise((r) => setTimeout(r, 5))
+          }
+          if (script.hang) return
+          send(c, 'citations', { items: script.citations ?? [] })
+          if (script.error) send(c, 'error', { code: script.error })
+          else {
+            const answer = script.tokens.join('')
+            const now = new Date().toISOString()
+            const list = (db.ai.messages[session.id] ??= [])
+            list.push({
+              id: `m-${(list.length + 1).toString()}`,
+              role: 'user',
+              content,
+              created_at: now,
+            })
+            const id = `m-${(list.length + 1).toString()}`
+            list.push({
+              id,
+              role: 'assistant',
+              content: answer,
+              citations: script.citations ?? [],
+              created_at: now,
+            })
+            if (session.title === 'New chat') session.title = content.slice(0, 60)
+            session.updated_at = now
+            send(c, 'done', { message_id: id, usage: { tokens_in: 100, tokens_out: 10 } })
+          }
+          c.close()
+        },
+      })
+      return new HttpResponse(stream, {
+        headers: { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache' },
+      })
     }),
     http.get(`${API}/resources/check-url`, async ({ request }) => {
       await record(request, '/resources/check-url')

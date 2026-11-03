@@ -1,5 +1,10 @@
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, type UseQueryResult } from '@tanstack/react-query'
+import type { components } from '@/api/schema'
 import { Plus } from 'lucide-react'
+import { ApiProblem } from '@/api/client'
+import { messageFor } from '@/api/problems'
+import { AiMark } from '@/features/ai/AiMark'
+import { useAi } from '@/features/ai/queries'
 import { useMemo, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -18,7 +23,7 @@ import {
 import { useBulk, useDeleteResource, useUpdateResource } from './mutations'
 import { Pagination } from './Pagination'
 import { useQuickAdd } from './QuickAdd'
-import { collectionsQuery, resourcesQuery } from './queries'
+import { collectionsQuery, resourcesQuery, semanticQuery } from './queries'
 import { ResourceDrawer } from './ResourceDrawer'
 import { ResourceRow, type RowActions } from './ResourceRow'
 import type { Resource } from './types'
@@ -38,7 +43,13 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
   usePageTitle(title)
   const quickAdd = useQuickAdd()
   const apiQuery = toApiQuery(search, scopeCollectionId)
-  const list = useQuery(resourcesQuery(apiQuery))
+  const semantic = search.mode === 'semantic' && scopeCollectionId === undefined
+  const ai = useAi()
+  const list = useQuery({ ...resourcesQuery(apiQuery), enabled: !semantic })
+  const meaning = useQuery({
+    ...semanticQuery(search.q ?? '', search.size ?? DEFAULT_PAGE_SIZE),
+    enabled: semantic && Boolean(search.q),
+  })
   const { data: collections } = useQuery(collectionsQuery)
   const update = useUpdateResource()
   const remove = useDeleteResource()
@@ -50,8 +61,11 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
   const [tagging, setTagging] = useState<'add' | 'remove' | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
 
-  const items = list.data?.items ?? []
-  const total = list.data?.total ?? 0
+  const items = semantic
+    ? (meaning.data?.items.map((i) => i.resource) ?? [])
+    : (list.data?.items ?? [])
+  const total = semantic ? (meaning.data?.total ?? 0) : (list.data?.total ?? 0)
+  const snippets = new Map((meaning.data?.items ?? []).map((i) => [i.resource.id, i.snippet]))
   const collectionName = useMemo(
     () => new Map((collections?.items ?? []).map((c) => [c.id, `${c.icon ?? '📁'} ${c.name}`])),
     [collections],
@@ -150,7 +164,7 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h1 className="text-2xl font-semibold">{title}</h1>
           <p className="text-sm text-muted-foreground" aria-live="polite">
-            {list.data ? plural(total, 'resource') : ''}
+            {(semantic ? meaning.data : list.data) ? plural(total, 'resource') : ''}
           </p>
         </div>
         {header}
@@ -188,7 +202,21 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
         <FilterBar search={search} setSearch={setSearch} scoped={scopeCollectionId !== undefined} />
       )}
 
-      {list.isPending ? (
+      {semantic ? (
+        <SemanticBody
+          q={search.q}
+          meaning={meaning}
+          items={items}
+          snippets={snippets}
+          collectionName={collectionName}
+          selected={selected}
+          activeId={activeId}
+          actions={actions}
+          onKeyword={() => {
+            setSearch({ mode: undefined })
+          }}
+        />
+      ) : list.isPending ? (
         <ul aria-busy="true" aria-label="Loading resources" className="divide-y rounded-md border">
           {Array.from({ length: 6 }, (_, i) => (
             <li key={i} className="space-y-2 p-4">
@@ -215,6 +243,17 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
                 ? `Nothing matches '${search.q}' with these filters.`
                 : 'Nothing matches these filters.'}
             </p>
+            {search.q && ai.available && (
+              <Button
+                variant="outline"
+                className="mr-2"
+                onClick={() => {
+                  setSearch({ mode: 'semantic', page: undefined })
+                }}
+              >
+                <AiMark /> Search by meaning instead
+              </Button>
+            )}
             <Button
               variant="outline"
               onClick={() => {
@@ -350,5 +389,102 @@ export function LibraryView({ search, setSearch, scopeCollectionId, title, heade
         />
       )}
     </div>
+  )
+}
+
+interface SemanticBodyProps {
+  q: string | undefined
+  meaning: UseQueryResult<components['schemas']['SemanticSearchPage']>
+  items: Resource[]
+  snippets: Map<string, string>
+  collectionName: Map<string, string>
+  selected: Set<string>
+  activeId: string | undefined
+  actions: RowActions
+  onKeyword: () => void
+}
+
+/** Results of a search by meaning (Doc 03 §5.2): the matching passage under each title, marked ✦. */
+function SemanticBody({
+  q,
+  meaning,
+  items,
+  snippets,
+  collectionName,
+  selected,
+  activeId,
+  actions,
+  onKeyword,
+}: SemanticBodyProps) {
+  if (!q)
+    return (
+      <div className="rounded-md border p-8 text-center text-muted-foreground">
+        <AiMark /> Describe what you are looking for and press Enter. Results are matched by
+        meaning, so the words do not have to appear in the page.
+      </div>
+    )
+  if (meaning.isPending)
+    return (
+      <ul aria-busy="true" aria-label="Searching by meaning" className="divide-y rounded-md border">
+        {Array.from({ length: 4 }, (_, i) => (
+          <li key={i} className="space-y-2 p-4">
+            <Skeleton className="h-4 w-2/3" />
+            <Skeleton className="h-3 w-full" />
+          </li>
+        ))}
+      </ul>
+    )
+  if (meaning.isError)
+    return (
+      <div role="alert" className="space-y-3 rounded-md border border-destructive p-6 text-center">
+        <p className="font-medium">
+          {meaning.error instanceof ApiProblem && meaning.error.code === 'ai_quota_exceeded'
+            ? messageFor(meaning.error.code, meaning.error)
+            : "Couldn't search by meaning."}
+        </p>
+        <div className="flex justify-center gap-2">
+          <Button variant="outline" onClick={() => void meaning.refetch()}>
+            Try again
+          </Button>
+          <Button variant="outline" onClick={onKeyword}>
+            Use keyword search
+          </Button>
+        </div>
+      </div>
+    )
+  return (
+    <>
+      {meaning.data.fallback && (
+        <p role="status" className="rounded-md border border-border bg-muted p-3 text-sm">
+          Semantic search is unavailable, showing keyword results.
+        </p>
+      )}
+      {items.length === 0 ? (
+        <div className="space-y-3 rounded-md border p-8 text-center">
+          <p className="font-medium">
+            Nothing in your library matches &lsquo;{q}&rsquo; by meaning.
+          </p>
+          <Button variant="outline" onClick={onKeyword}>
+            Use keyword search
+          </Button>
+        </div>
+      ) : (
+        <ul aria-label="Resources" className="rounded-md border">
+          {items.map((r) => (
+            <ResourceRow
+              key={r.id}
+              resource={r}
+              collectionLabel={r.collection_id ? collectionName.get(r.collection_id) : undefined}
+              selected={selected.has(r.id)}
+              active={r.id === activeId}
+              onSelect={() => undefined}
+              actions={actions}
+              snippet={meaning.data.fallback ? undefined : snippets.get(r.id)}
+              selectable={false}
+            />
+          ))}
+        </ul>
+      )}
+    </>
   )
 }

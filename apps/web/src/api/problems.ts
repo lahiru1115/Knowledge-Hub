@@ -1,3 +1,4 @@
+import { timeAgo } from '@/lib/format'
 import type { components } from './schema'
 
 export type ProblemCode = components['schemas']['ProblemCode']
@@ -41,7 +42,10 @@ const messages: Record<ClientProblemCode, Message> = {
     c.retryAfter
       ? `You're going a bit fast. Try again in ${c.retryAfter.toString()} seconds.`
       : "You're going a bit fast. Try again in a moment.",
-  ai_quota_exceeded: "You've used today's AI limit. It resets at midnight UTC.",
+  ai_quota_exceeded: (c) =>
+    c.resetAt
+      ? `You've used today's AI limit. It resets ${timeAgo(c.resetAt)}.`
+      : "You've used today's AI limit. It resets at midnight UTC.",
   internal_error: 'Something went wrong on our side. Try again in a moment.',
   ai_unavailable: 'AI features are unavailable right now. Everything else still works.',
   service_unavailable: 'Something went wrong on our side. Try again in a moment.',

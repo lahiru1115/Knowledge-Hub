@@ -21,6 +21,9 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Toggle } from '@/components/ui/toggle'
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group'
+import { AiMark } from '@/features/ai/AiMark'
+import { UNAVAILABLE_TIP, useAi } from '@/features/ai/queries'
 import { useIsDesktop } from '@/lib/useMediaQuery'
 import { activeFilterCount, type LibrarySearch } from './librarySearch'
 import { collectionsQuery, tagsQuery } from './queries'
@@ -40,12 +43,18 @@ export function FilterBar({ search, setSearch, scoped }: Props) {
   const desktop = useIsDesktop()
   const [sheet, setSheet] = useState(false)
   const count = activeFilterCount(search)
+  const semantic = search.mode === 'semantic'
 
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
         <QueryBox search={search} setSearch={setSearch} />
-        {desktop ? (
+        {!scoped && <ModeToggle search={search} setSearch={setSearch} />}
+        {semantic ? (
+          <p className="text-xs text-muted-foreground">
+            Filters and sorting aren&apos;t available when searching by meaning.
+          </p>
+        ) : desktop ? (
           <>
             <FilterControls search={search} setSearch={setSearch} scoped={scoped} />
             <SortSelect search={search} setSearch={setSearch} />
@@ -62,7 +71,7 @@ export function FilterBar({ search, setSearch, scoped }: Props) {
           </Button>
         )}
       </div>
-      {!desktop && (
+      {!desktop && !semantic && (
         <Sheet open={sheet} onOpenChange={setSheet}>
           <SheetContent side="bottom" className="max-h-[85dvh] overflow-y-auto px-4 pb-6">
             <SheetHeader>
@@ -84,12 +93,41 @@ export function FilterBar({ search, setSearch, scoped }: Props) {
           </SheetContent>
         </Sheet>
       )}
-      <ActiveFilters search={search} setSearch={setSearch} scoped={scoped} />
+      {!semantic && <ActiveFilters search={search} setSearch={setSearch} scoped={scoped} />}
     </div>
   )
 }
 
+/** Keyword | Semantic ✦ (Doc 03 §5.2). Semantic is disabled, with the reason, while the AI service is down. */
+function ModeToggle({ search, setSearch }: Pick<Props, 'search' | 'setSearch'>) {
+  const ai = useAi()
+  const mode = search.mode ?? 'keyword'
+  return (
+    <ToggleGroup
+      type="single"
+      variant="outline"
+      aria-label="Search mode"
+      value={mode}
+      onValueChange={(value) => {
+        // Pressing the active item again reports an empty value; keep the mode.
+        if (value)
+          setSearch({ mode: value === 'semantic' ? 'semantic' : undefined, page: undefined })
+      }}
+    >
+      <ToggleGroupItem value="keyword">Keyword</ToggleGroupItem>
+      <ToggleGroupItem
+        value="semantic"
+        disabled={!ai.available && mode !== 'semantic'}
+        title={ai.available ? 'Find resources by meaning, not just words' : UNAVAILABLE_TIP}
+      >
+        Semantic <AiMark />
+      </ToggleGroupItem>
+    </ToggleGroup>
+  )
+}
+
 function QueryBox({ search, setSearch }: Pick<Props, 'search' | 'setSearch'>) {
+  const semantic = search.mode === 'semantic'
   const [text, setText] = useState(search.q ?? '')
   // The `q` this box last agreed with the URL on. A different value in the URL means it changed from outside
   // (Back, Clear all, the top bar search), so the box follows; our own writes never trigger this.
@@ -106,10 +144,20 @@ function QueryBox({ search, setSearch }: Pick<Props, 'search' | 'setSearch'>) {
     [],
   )
 
-  /** Typing updates the box at once and the URL 300 ms after the last keystroke. */
+  function commit(value: string) {
+    clearTimeout(timer.current)
+    setSynced(value.trim() || undefined)
+    setSearch({ q: value.trim() || undefined, page: undefined }, { replace: true })
+  }
+
+  /**
+   * Typing updates the box at once. For keyword search the URL follows 300 ms after the last keystroke; a search by
+   * meaning counts against a daily limit, so it waits for Enter.
+   */
   function onChange(value: string) {
     setText(value)
     clearTimeout(timer.current)
+    if (semantic) return
     timer.current = setTimeout(() => {
       setSynced(value || undefined)
       setSearch({ q: value || undefined, page: undefined }, { replace: true })
@@ -117,7 +165,13 @@ function QueryBox({ search, setSearch }: Pick<Props, 'search' | 'setSearch'>) {
   }
 
   return (
-    <div className="relative min-w-52 flex-1 basis-64">
+    <form
+      className="relative min-w-52 flex-1 basis-64"
+      onSubmit={(e) => {
+        e.preventDefault()
+        commit(text)
+      }}
+    >
       <Search
         className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground"
         aria-hidden="true"
@@ -126,14 +180,16 @@ function QueryBox({ search, setSearch }: Pick<Props, 'search' | 'setSearch'>) {
         type="search"
         aria-label="Search your library"
         data-page-search
-        placeholder="Search your library…"
+        placeholder={
+          semantic ? 'Describe what you are looking for, then press Enter' : 'Search your library…'
+        }
         className="pl-9"
         value={text}
         onChange={(e) => {
           onChange(e.target.value)
         }}
       />
-    </div>
+    </form>
   )
 }
 

@@ -18,6 +18,8 @@ export const librarySearchSchema = z.object({
   sort: z.enum(['relevance', 'newest', 'oldest', 'title', 'updated']).optional().catch(undefined),
   page: z.coerce.number().int().min(1).optional().catch(undefined),
   size: z.coerce.number().int().min(1).max(100).optional().catch(undefined),
+  /** Search by meaning instead of by words (FR-AI-05). Runs when the user presses Enter, as it counts against a daily limit. */
+  mode: z.enum(['keyword', 'semantic']).optional().catch(undefined),
   /** The resource open in the drawer. */
   r: z.string().optional().catch(undefined),
 })

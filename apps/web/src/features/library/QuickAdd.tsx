@@ -4,6 +4,8 @@ import { ChevronRight } from 'lucide-react'
 import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from 'react'
 import { toast } from 'sonner'
 import { api, unwrap } from '@/api/client'
+import { SuggestedTags } from '@/features/ai/SuggestedTags'
+import { useAi } from '@/features/ai/queries'
 import { LoadingButton } from '@/components/loading-button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
@@ -188,6 +190,7 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
   const qc = useQueryClient()
   const navigate = useNavigate()
   const create = useCreateResource()
+  const ai = useAi()
   const { data: collections } = useQuery(collectionsQuery)
 
   const [url, setUrl] = useState(initial.url ?? '')
@@ -330,6 +333,16 @@ function QuickAddForm({ initial, onClose }: { initial: Initial; onClose: () => v
       {!showDuplicate && <PreviewCard url={debouncedUrl} current={url.trim()} />}
 
       <TagInput value={tags} onChange={setTags} />
+      {valid && debouncedUrl === url.trim() && (
+        <SuggestedTags
+          url={debouncedUrl}
+          current={tags}
+          enabled={ai.tagSuggestions}
+          onAccept={(names) => {
+            setTags((t) => [...new Set([...t, ...names])])
+          }}
+        />
+      )}
 
       <Field>
         <FieldLabel htmlFor="qa-collection">Collection</FieldLabel>

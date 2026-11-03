@@ -12,6 +12,9 @@ import {
 import { useState } from 'react'
 import { toast } from 'sonner'
 import { api, ApiProblem, unwrap } from '@/api/client'
+import { RelatedResources } from '@/features/ai/RelatedResources'
+import { SuggestedTags } from '@/features/ai/SuggestedTags'
+import { useAi } from '@/features/ai/queries'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -128,15 +131,24 @@ export function ResourceDrawer({ id, siblings, onNavigate, onClose }: Props) {
             </div>
           </>
         ) : (
-          <DrawerBody resource={query.data} onClose={onClose} />
+          <DrawerBody resource={query.data} onClose={onClose} onNavigate={onNavigate} />
         )}
       </SheetContent>
     </Sheet>
   )
 }
 
-function DrawerBody({ resource, onClose }: { resource: Resource; onClose: () => void }) {
+function DrawerBody({
+  resource,
+  onClose,
+  onNavigate,
+}: {
+  resource: Resource
+  onClose: () => void
+  onNavigate: (id: string) => void
+}) {
   const qc = useQueryClient()
+  const ai = useAi()
   const update = useUpdateResource()
   const remove = useDeleteResource()
   const [editingTitle, setEditingTitle] = useState(false)
@@ -398,6 +410,14 @@ function DrawerBody({ resource, onClose }: { resource: Resource; onClose: () => 
             void patch({ tags }).catch(() => undefined)
           }}
         />
+        <SuggestedTags
+          resourceId={resource.id}
+          current={resource.tags}
+          enabled={ai.tagSuggestions}
+          onAccept={(names) => {
+            void patch({ tags: [...new Set([...resource.tags, ...names])] }).catch(() => undefined)
+          }}
+        />
 
         <Separator />
         <SummaryBlock
@@ -416,6 +436,7 @@ function DrawerBody({ resource, onClose }: { resource: Resource; onClose: () => 
         />
         <Separator />
         <NotesEditor key={resource.id} resource={resource} />
+        <RelatedResources id={resource.id} onOpen={onNavigate} />
       </div>
     </>
   )

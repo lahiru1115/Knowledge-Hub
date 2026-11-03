@@ -472,7 +472,7 @@ describe('resource drawer', () => {
       const { drawer } = await openDrawer(
         makeResource({ title: 'Deep dive', summary: 'Generated text.', summary_source: 'ai' }),
       )
-      expect(within(drawer).getByText('✦ AI-generated')).toBeInTheDocument()
+      expect(within(drawer).getByText(/AI-generated · may contain mistakes/)).toBeInTheDocument()
       expect(within(drawer).getByText('Generated text.')).toBeInTheDocument()
     })
   })
