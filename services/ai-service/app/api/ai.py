@@ -9,17 +9,30 @@ from sqlalchemy import text
 
 from app.auth import current_user
 from app.errors import ApiError
-from app.providers.base import NotEnoughContent
+from app.providers import Providers
+from app.providers.base import NotEnoughContent, Usage
 from app.providers.free.tagger import normalise_tag
-from app.quota import UsageMeter
+from app.quota import UsageMeter, estimate_tokens
 
 router = APIRouter(tags=["ai"])
 log = logging.getLogger(__name__)
 
 
 def meter(request: Request) -> UsageMeter:
-    p = request.app.state.providers
-    return UsageMeter(request.app.state.engine, request.app.state.settings.quotas(), p.profile)
+    state = request.app.state
+    p = state.providers
+    # Paid providers also have a daily spending cap per user; the free profile has none.
+    cap = state.settings.daily_cost_cap_usd if p.profile == "claude" else None
+    return UsageMeter(state.engine, state.settings.quotas(), p.profile, state.costs, cap)
+
+
+async def active_providers(request: Request) -> Providers:
+    """The providers for a summary, tag suggestions or chat: the free ones once the monthly spending cap is reached."""
+    p: Providers = request.app.state.providers
+    if p.fallback is not None and await request.app.state.cost_guard.monthly_cap_reached():
+        log.warning("The monthly AI cost cap is reached; using the free providers")
+        return p.fallback
+    return p
 
 
 Meter = Annotated[UsageMeter, Depends(meter)]
@@ -56,14 +69,15 @@ class SummarizeResponse(BaseModel):
 
 @router.post("/summarize")
 async def summarize(body: SummarizeRequest, user: User, request: Request, usage: Meter) -> SummarizeResponse:
-    summarizer = request.app.state.providers.summarizer
+    chosen = await active_providers(request)
+    summarizer = chosen.summarizer
     page_text = body.text if body.text is not None else await stored_text(request, user, body.resource_id)
     # The key covers everything the summary depends on, so an edit to the text gives a new summary.
     digest = hashlib.sha256(
         "\x00".join([body.title or "", body.description or "", page_text or ""]).encode()
     ).hexdigest()
 
-    reservation = await usage.reserve(user, "summarize", summarizer.model_id)
+    reservation = await usage.reserve(user, "summarize", summarizer.model_id, provider=chosen.profile)
     try:
         async with request.app.state.engine.connect() as conn:
             cached = (
@@ -87,7 +101,15 @@ async def summarize(body: SummarizeRequest, user: User, request: Request, usage:
                 ),
                 {"u": user, "h": digest, "m": result.model, "s": result.text, "src": result.source},
             )
-        await usage.finish(reservation, len((page_text or body.description or "").split()), len(result.text.split()))
+        used = result.usage
+        if (
+            used.tokens_in == 0 and used.tokens_out == 0
+        ):  # a provider that does not count tokens: estimate from the words
+            used = Usage(
+                estimate_tokens(len((page_text or body.description or "").split())),
+                estimate_tokens(len(result.text.split())),
+            )
+        await usage.finish(reservation, used.tokens_in, used.tokens_out)
         return SummarizeResponse(summary=result.text, source=result.source, model=result.model)
     except NotEnoughContent:
         await usage.cancel(reservation)  # nothing was produced, so it does not count
@@ -116,12 +138,16 @@ class SuggestTagsResponse(BaseModel):
 
 @router.post("/suggest-tags")
 async def suggest_tags(body: SuggestTagsRequest, user: User, request: Request, usage: Meter) -> SuggestTagsResponse:
-    providers = request.app.state.providers
+    providers = await active_providers(request)
     page_text = body.text if body.text is not None else await stored_text(request, user, body.resource_id)
-    reservation = await usage.reserve(user, "suggest_tags", providers.embedder.model_id)
+    model = getattr(providers.tagger, "model_id", providers.embedder.model_id)  # a paid tagger is its own model
+    reservation = await usage.reserve(user, "suggest_tags", model, provider=providers.profile)
     try:
         names = await providers.tagger.suggest(body.title, body.description, page_text, body.existing_tags)
-        await usage.finish(reservation, len((page_text or "")[:2000].split()), len(names))
+        used: Usage = getattr(names, "usage", Usage())
+        if used.tokens_in == 0 and used.tokens_out == 0:
+            used = Usage(estimate_tokens(len((page_text or "")[:2000].split())), len(names))
+        await usage.finish(reservation, used.tokens_in, used.tokens_out)
     except BaseException:
         await usage.cancel(reservation)
         raise

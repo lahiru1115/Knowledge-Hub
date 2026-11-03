@@ -26,7 +26,7 @@ class IndexResponse(BaseModel):
 
 def index_service(request: Request) -> IndexService:
     p = request.app.state.providers
-    return IndexService(request.app.state.engine, p.embedder, p.profile)
+    return IndexService(request.app.state.engine, p.embedder, p.profile, request.app.state.costs)
 
 
 Service = Annotated[IndexService, Depends(index_service)]

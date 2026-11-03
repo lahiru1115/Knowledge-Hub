@@ -57,3 +57,19 @@ class ScriptedLlm:
                 raise LlmUnavailable("cut off")
             yield piece
         yield self.usage
+
+
+class PaidSummarizer:
+    """Stands in for a paid summariser: reports tokens, so cost can be checked."""
+
+    model_id = "paid-small"
+
+    def __init__(self, usage: Usage = Usage(1000, 200)) -> None:  # noqa: B008
+        self.usage = usage
+        self.calls = 0
+
+    async def summarize(self, title, description, text):
+        from app.providers.base import Summary
+
+        self.calls += 1
+        return Summary("A paid summary.", "ai", self.model_id, self.usage)

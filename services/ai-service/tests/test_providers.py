@@ -183,9 +183,3 @@ def test_the_free_profile_builds_the_free_providers():
     assert p.profile == "free"
     assert p.embedder.model_id == "BAAI/bge-small-en-v1.5"
     assert p.summarizer.model_id == "extractive-v1"
-
-
-def test_the_claude_profile_is_not_available_yet():
-    s = Settings(AI_DATABASE_URL="postgresql://x", SERVICE_JWT_SECRET="s" * 32, AI_PROFILE="claude")  # type: ignore[call-arg]
-    with pytest.raises(NotImplementedError):
-        build_providers(s)

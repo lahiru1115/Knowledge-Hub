@@ -12,18 +12,28 @@ class NotEnoughContent(Exception):
 
 
 @dataclass(frozen=True)
-class Summary:
-    text: str
-    source: SummarySource
-    model: str
-
-
-@dataclass(frozen=True)
 class Usage:
     """Tokens a provider reports for one call; zero for local providers."""
 
     tokens_in: int = 0
     tokens_out: int = 0
+
+
+@dataclass(frozen=True)
+class Summary:
+    text: str
+    source: SummarySource
+    model: str
+    #: What the call used, for metering and cost. Local providers leave it at zero.
+    usage: Usage = Usage()
+
+
+class Suggestions(list[str]):
+    """Tag suggestions as a plain list, plus what producing them used (zero for local providers)."""
+
+    def __init__(self, tags: Sequence[str] = (), usage: Usage | None = None) -> None:
+        super().__init__(tags)
+        self.usage = usage or Usage()
 
 
 class Summarizer(Protocol):

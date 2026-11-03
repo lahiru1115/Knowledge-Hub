@@ -8,7 +8,9 @@ from typing import Literal
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from app.pricing import CostCalculator
 from app.providers.base import Embedder
+from app.quota import estimate_tokens
 from app.retrieval.chunker import build_document, chunk_document
 
 BATCH = 32
@@ -35,10 +37,13 @@ def vector_literal(v: list[float]) -> str:
 
 
 class IndexService:
-    def __init__(self, engine: AsyncEngine, embedder: Embedder, provider: str) -> None:
+    def __init__(
+        self, engine: AsyncEngine, embedder: Embedder, provider: str, costs: CostCalculator | None = None
+    ) -> None:
         self._engine = engine
         self._embedder = embedder
         self._provider = provider
+        self._costs = costs or CostCalculator()
 
     async def put(self, user_id: uuid.UUID, resource_id: uuid.UUID, data: IndexInput) -> IndexResult:
         async with self._engine.begin() as conn:
@@ -92,6 +97,7 @@ class IndexService:
         for i in range(0, len(chunks), BATCH):
             vectors.extend(await self._embedder.embed_documents(chunks[i : i + BATCH]))
 
+        tokens = estimate_tokens(sum(len(c.split()) for c in chunks))
         # Replace the resource's chunks for this model in one transaction. Rows of other models stay, so search
         # keeps working while a profile switch re-indexes.
         async with self._engine.begin() as conn:
@@ -122,15 +128,16 @@ class IndexService:
             )
             await conn.execute(
                 text(
-                    "INSERT INTO ai.usage (id, user_id, operation, provider, model, tokens_in) "
-                    "VALUES (:id, :u, 'embed', :p, :m, :t)"
+                    "INSERT INTO ai.usage (id, user_id, operation, provider, model, tokens_in, cost_usd) "
+                    "VALUES (:id, :u, 'embed', :p, :m, :t, :cost)"
                 ),
                 {
                     "id": uuid.uuid4(),
                     "u": user_id,
                     "p": self._provider,
                     "m": model,
-                    "t": sum(len(c.split()) for c in chunks),
+                    "t": tokens,
+                    "cost": self._costs.cost(model, tokens),
                 },
             )
         return IndexResult("indexed", len(chunks))

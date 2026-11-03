@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, Request, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.api.ai import Meter, User
+from app.api.ai import Meter, User, active_providers
 from app.chat import ChatService
 
 router = APIRouter(tags=["chat"])
@@ -61,9 +61,11 @@ async def ask(
     session_id: uuid.UUID, body: Ask, user: User, request: Request, chats: Chats, usage: Meter
 ) -> StreamingResponse:
     session = await chats.check_session(user, session_id)  # 404 before anything is streamed
-    providers = request.app.state.providers
+    providers = await active_providers(request)
     settings = request.app.state.settings
-    reservation = await usage.reserve(user, "chat", providers.llm.model_id)  # 429 before anything is streamed
+    reservation = await usage.reserve(
+        user, "chat", providers.llm.model_id, provider=providers.profile
+    )  # 429 before anything is streamed
     stream = chats.ask(
         user,
         session,

@@ -21,7 +21,7 @@ MIGRATOR_URL = os.environ.get(
 
 
 def settings() -> Settings:
-    return Settings(AI_DATABASE_URL=APP_URL, SERVICE_JWT_SECRET=SECRET)  # type: ignore[call-arg]
+    return Settings(AI_DATABASE_URL=APP_URL, SERVICE_JWT_SECRET=SECRET, REINDEX_ENABLED=False)  # type: ignore[call-arg]
 
 
 def make_token(

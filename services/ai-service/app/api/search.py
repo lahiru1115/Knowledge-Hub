@@ -5,6 +5,7 @@ from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
 from app.api.ai import Meter, User
+from app.quota import estimate_tokens
 from app.retrieval.hybrid import hybrid_search, related, snippet
 
 router = APIRouter(tags=["search"])
@@ -39,7 +40,7 @@ async def search(body: SearchRequest, user: User, request: Request, usage: Meter
             limit=body.limit,
             collection_id=body.collection_id,
         )
-        await usage.finish(reservation, len(body.query.split()), 0)
+        await usage.finish(reservation, estimate_tokens(len(body.query.split())), 0)
     except BaseException:
         await usage.cancel(reservation)  # a search that failed does not use up the day's allowance
         raise
