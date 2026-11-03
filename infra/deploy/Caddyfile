@@ -1,6 +1,7 @@
-# The public face of the VM when the web app is on Vercel (Doc 02 §10.2): TLS, and /api/* forwarded to the Core API.
+# The public face of the VM when the web app is on Vercel (an option, not the default: ADR-012 found that Vercel cuts
+# proxied requests at 30 seconds, which would end long chat answers): TLS, and /api/* forwarded to the Core API.
 # Nothing else is exposed: the AI service and Ollama are not reachable from here.
-{$API_HOST} {
+{$SITE_HOST} {
 	encode zstd gzip
 
 	# Readiness shows internal state; only the load balancer's liveness check is public.

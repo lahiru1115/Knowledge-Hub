@@ -53,6 +53,16 @@ jobs:
           push: true
           tags: ${{ env.REGISTRY }}/knowledge-hub-migrate-core:${{ steps.tag.outputs.tag }}
           cache-from: type=gha,scope=core-api
+      - name: Caddy with the web app inside
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: infra/deploy/web.Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/knowledge-hub-caddy-web:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
       - name: AI service (also runs the AI migrations)
         uses: docker/build-push-action@v6
         with:
@@ -74,7 +84,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: infra/deploy/compose.yaml,infra/deploy/Caddyfile,infra/deploy/Caddyfile.same-origin
+          source: infra/deploy/compose.yaml,infra/deploy/Caddyfile,infra/deploy/Caddyfile.same-origin,infra/deploy/backup.sh,infra/deploy/make-init.sh
           target: ~/knowledge-hub
           strip_components: 2
       - name: Pull, migrate, restart
@@ -91,6 +101,9 @@ jobs:
             cd ~/knowledge-hub
             sed -i "s|^TAG=.*|TAG=$TAG|" .env
             docker compose --env-file .env pull
+            if docker compose --env-file .env config --services | grep -qx postgres; then
+              docker compose --env-file .env up -d --wait postgres
+            fi
             docker compose --env-file .env run --rm migrate-core
             docker compose --env-file .env run --rm migrate-ai
             docker compose --env-file .env up -d --remove-orphans
@@ -98,7 +111,7 @@ jobs:
       - name: Check that it came up
         run: |
           for i in $(seq 1 30); do
-            curl -fsS "https://${{ secrets.DEPLOY_API_HOST }}/health/live" && exit 0
+            curl -fsS "https://${{ secrets.DEPLOY_SITE_HOST }}/health/live" && exit 0
             sleep 5
           done
           echo "The API did not answer /health/live in time" >&2

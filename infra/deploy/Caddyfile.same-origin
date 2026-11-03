@@ -1,7 +1,7 @@
-# Fallback for AR-03 (Vercel buffers or cuts the chat stream) and for seeing real client addresses: Caddy serves the
-# web app itself, so the browser talks to one origin and no rewrite sits in between. Use with web.Dockerfile:
-#   CADDYFILE=./Caddyfile.same-origin and CADDY_IMAGE=<registry>/knowledge-hub-caddy-web:<tag>
-{$API_HOST} {
+# The default (ADR-012): Caddy serves the web app and forwards /api/* to the Core API. One origin means first-party
+# cookies, no 30-second proxy limit on chat streaming, and the real client address reaches the API.
+# The image is built by deploy.yml from web.Dockerfile.
+{$SITE_HOST} {
 	encode zstd gzip
 
 	@internal path /health/ready

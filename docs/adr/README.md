@@ -15,3 +15,4 @@ Full records for the decisions summarised in [Doc 02 §13](../02-system-architec
 | [009](009-zero-cost-default-ai-profile.md) | Zero-cost default AI profile | Accepted |
 | [010](010-single-vm-demo-hosting.md) | Single-VM demo hosting | Accepted |
 | [011](011-local-onnx-embeddings-per-model-vector-indexes.md) | Local ONNX embeddings, per-model vector indexes | Accepted |
+| [012](012-demo-hosting-after-recheck.md) | Demo hosting after re-checking free-tier terms | Accepted (changes parts of 010) |

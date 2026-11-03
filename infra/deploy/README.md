@@ -1,42 +1,47 @@
 # Demo deployment
 
-One VM runs Caddy, the Core API, the AI service and (for the free AI profile) Ollama. The database is Neon. The web app
-is on Vercel, or served by Caddy itself. Doc 02 §10.2 explains the choices and the fallback.
+One VM runs Caddy (which also serves the web app), the Core API, the AI service, PostgreSQL and, for the free AI
+profile, Ollama. [ADR-012](../../docs/adr/012-demo-hosting-after-recheck.md) explains why this differs from the first
+plan (Neon and Vercel) and lists the free-tier terms as they were read on 2026-11-03.
 
 **Status:** written and checked for syntax, never run. There is no Docker or cloud account where this was prepared, so
-the first deployment will find things. The list under "Check on first deployment" says what to look at.
+the first deployment will find things. "Check on first deployment" says what to look at.
 
 ## What is here
 
 | File | What it does |
 |---|---|
-| `compose.yaml` | The services. Only Caddy publishes ports; the API, AI service and Ollama are on an internal network. Two one-shot jobs (`migrate-core`, `migrate-ai`) run before the services that need them. |
-| `Caddyfile` | TLS and `/api/*` to the Core API, response streaming on, `/health/ready` hidden. Use with the web app on Vercel. |
-| `Caddyfile.same-origin`, `web.Dockerfile` | Fallback: Caddy serves the web app too, so there is no Vercel rewrite (AR-03) and the real client address reaches the API. |
+| `compose.yaml` | The services. Only Caddy publishes ports. Migrations run as one-shot jobs first. PostgreSQL is in the `local-db` profile, Ollama in `free-ai`; both are switched on with `COMPOSE_PROFILES` in `.env`. |
+| `Caddyfile.same-origin`, `web.Dockerfile` | The default: Caddy serves the web app and forwards `/api/*`, with response streaming on and `/health/ready` hidden. |
+| `Caddyfile` | The alternative layout with the web app on Vercel. Not the default: Vercel cuts proxied requests at 30 seconds, which ends long chat answers. |
+| `make-init.sh` | Makes `init.local.sql` with fresh role passwords and prints the `.env` lines for the local database. |
+| `backup.sh` | Nightly `pg_dump`, keeps 14. |
 | `.env.example` | Every setting, with notes. |
-| `../../apps/web/vercel.json` | The rewrite of `/api/*` to the VM, and the security headers for the web app. |
-| `../../.github/workflows/deploy.yml` | Builds arm64 images, pushes them to GHCR, updates the VM. Does nothing until `DEPLOY_ENABLED` is `true`. |
+| `../../.github/workflows/deploy.yml` | Builds arm64 images to GHCR and updates the VM. Does nothing until `DEPLOY_ENABLED` is `true`. |
 
 ## One-time setup
 
-1. **Database (Neon).** Create a project in the region nearest the VM and a database `knowledge_hub`. As the owner, run
-   `infra/db/init.sql` once, after changing the four role passwords in it. Put the pooled host in the `*_APP_*` settings and
-   the direct host in the `*_MIGRATOR_*` ones (migrations should not go through the pooler). Check
-   `infra/db/check-roles.sh` against it.
-2. **VM.** Install Docker and the compose plugin. Open ports 80, 443 and 22 only. Point a DNS name (`API_HOST`) at it.
-   Create `~/knowledge-hub/.env` from `.env.example`, with fresh secrets. Log in to GHCR so it can pull
+1. **VM.** Ampere A1, **2 OCPU / 12 GB** (the reported current Always Free limit). Install Docker and the compose plugin.
+   Open ports 80, 443 and 22 only. Point a DNS name (`SITE_HOST`) at it. Log in to GHCR so it can pull
    (`docker login ghcr.io` with a token that can read packages).
-3. **GitHub.** Repository variable `DEPLOY_ENABLED=true`. Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`,
-   `DEPLOY_API_HOST` (the same name as `API_HOST`). An environment called `demo` (add required reviewers if you want to
-   approve each rollout).
-4. **Web.** In Vercel, import the repository with root `apps/web`. Put the real API host into `apps/web/vercel.json`
-   (`REPLACE-WITH-API-HOST`) and commit it. Set `Auth__AppBaseUrl` (`APP_BASE_URL`) to the Vercel address.
-5. **First start.** Push to `main` (or run the workflow). For the free AI profile start with the `free-ai` profile and pull
-   the chat model once: `docker compose --env-file .env --profile free-ai up -d`, then
-   `docker compose exec ollama ollama pull llama3.2:3b` (or the model in `LLM_MODEL`). The embedding model downloads on
-   the AI service's first use and is kept in the `models` volume.
-6. **Administrator.** Register in the web app with the address in `ADMIN_EMAIL`. The first account with that address
-   becomes the administrator.
+2. **Files and secrets.** Copy this directory to `~/knowledge-hub`. `cp .env.example .env`, fill in the secrets
+   (`openssl rand -base64 48`), then `./make-init.sh >> .env`. That sets the local database up with fresh passwords.
+   Keep `.env` and `init.local.sql` out of git (the `.gitignore` here does).
+3. **Email.** Create a Brevo account, verify the sending domain (add its SPF and DKIM records in DNS), create an SMTP key,
+   and fill in `SMTP_*` in `.env`.
+4. **GitHub.** Repository variable `DEPLOY_ENABLED=true`. Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`,
+   `DEPLOY_SITE_HOST` (the same as `SITE_HOST`). An environment called `demo` (add required reviewers to approve each
+   rollout).
+5. **First start.** Push to `main`, or run the workflow. It builds the images (slow the first time: emulated arm64), starts
+   PostgreSQL, runs both migrations, and starts the rest. For the free AI profile, pull the chat model once:
+   `docker compose --env-file .env exec ollama ollama pull llama3.2:3b` (or the model in `LLM_MODEL`). The embedding model
+   downloads on the AI service's first use and is kept in the `models` volume.
+6. **Backups.** `crontab -e`: `17 3 * * * cd ~/knowledge-hub && ./backup.sh >> backups/backup.log 2>&1`, and copy
+   `backups/` off the VM now and then (a backup on the same disk does not survive losing the VM).
+7. **Administrator.** Register in the web app with the address in `ADMIN_EMAIL`; it becomes the administrator.
+
+To use Neon instead of the local database, follow the comments in `.env.example`, run `infra/db/init.sql` there once as
+the owner, and drop `local-db` from `COMPOSE_PROFILES`.
 
 ## Everyday
 
@@ -48,28 +53,27 @@ docker compose --env-file .env logs ai-service | grep '"level": "error"'
 
 **Roll back:** set `TAG=` in `.env` to an earlier 12-character commit tag still in GHCR, then
 `docker compose --env-file .env up -d`. Migrations only move forward; a release that changed the schema needs a fix-forward
-or a restore from Neon's history.
-
-**Backups:** Neon keeps point-in-time history on its free plan for a short window only. Take your own `pg_dump` before a risky
-change. The only state on the VM is certificates (`caddy-data`) and downloaded models, both rebuildable.
+or a restore from `backups/`.
 
 ## Check on first deployment
 
-These are the open questions in the architecture document. Each can only be answered on the real host.
+Terms and limits change. Redo the first four on the day, from the providers' own pages.
 
-- [ ] **Free-tier terms (AR-01, OI-08).** Re-read Oracle's Always Free allowance and Neon's storage and compute limits today.
-      Confirm whether converting the Oracle account to Pay As You Go removes idle reclaim before relying on the VM.
-- [ ] **Chat through the Vercel rewrite (AR-03).** Sign in on the Vercel address, ask a question, and watch the answer arrive
-      word by word rather than all at once, and with no cut-off on a long answer. If it is buffered or stops, switch to the
-      same-origin fallback: build `web.Dockerfile`, set `CADDYFILE=./Caddyfile.same-origin` and `CADDY_IMAGE`, and point DNS
-      for the app name at the VM.
-- [ ] **Client addresses.** Behind Vercel the API sees Vercel's address in `X-Forwarded-For`, not the visitor's, so the per-IP
-      limits on sign-in and registration would be shared by everyone. Check the audit log (`core.audit_events.ip`) after two
-      sign-ins from different networks. If they match, use the same-origin fallback, where Caddy sees the real address.
-- [ ] **Email (OI-04).** Choose a provider with SMTP, fill in `SMTP_*`, and request a password reset to your own address.
-- [ ] **Speed of chat on the VM (AR-02).** Time a first token. On 2 OCPU it will be slower than the reference laptop; consider
-      a smaller model or `AI_PROFILE=claude` with the cost caps on.
-- [ ] **The arm64 build.** The first build under emulation is slow (the .NET publish especially); later ones use the cache.
-- [ ] **pgvector.** Neon offers a recent pgvector, but check it is 0.8 or newer (`SELECT extversion FROM pg_extension WHERE extname='vector'`):
-      semantic search relies on `hnsw.iterative_scan`.
-- [ ] **Ports.** From another machine, `nmap -p- API_HOST` shows only 80 and 443 (and 22). Port 8000 and 8080 are closed.
+- [ ] **Oracle Always Free (AR-01, OI-08).** Confirm the Ampere A1 allowance (reported 2 OCPU / 12 GB since 18 August
+      2026) and the idle-reclaim rule (reclaimed if over 7 days CPU, network and memory are each under 20 % at the 95th
+      percentile). Ask Oracle whether Pay As You Go removes reclaim or bills above the limit: sources disagree, and the
+      plan does not depend on it.
+- [ ] **Brevo (OI-04).** Confirm the free plan still allows 300 emails a day over SMTP. Request a password reset to your own
+      address and check it is not in spam (SPF and DKIM).
+- [ ] **Neon, only if used.** Compute hours per month and storage per project, and that a worker polling every 2 seconds
+      still exhausts them.
+- [ ] **Vercel, only if used.** The proxy time limit, and that the use counts as non-commercial.
+- [ ] **Chat.** Ask a long question in the web app and watch the answer arrive word by word until the end, with no cut-off.
+- [ ] **Client addresses.** Sign in from two different networks and check `core.audit_events.ip` shows two different
+      addresses, not Caddy's.
+- [ ] **Speed of chat on the VM (AR-02).** Time a first token. On 2 OCPU it will be slower than the reference laptop;
+      consider a smaller model or `AI_PROFILE=claude` with the cost caps on.
+- [ ] **pgvector.** `SELECT extversion FROM pg_extension WHERE extname='vector'` is 0.8 or newer (semantic search relies on
+      `hnsw.iterative_scan`). The `pgvector/pgvector:pg17` image should give it; check.
+- [ ] **Ports.** From another machine, `nmap -p- SITE_HOST` shows only 80 and 443 (and 22).
+- [ ] **A restore.** Run `backup.sh`, then restore the file into a scratch database. An untested backup is a guess.

@@ -2,7 +2,7 @@
 
 | | |
 |---|---|
-| **Status** | Accepted |
+| **Status** | Accepted; the Neon and Vercel parts are superseded by [ADR-012](012-demo-hosting-after-recheck.md) |
 | **Date** | 2026-11-02 |
 | **Source** | [Doc 02 — System architecture](../02-system-architecture.md) §13 |
 
