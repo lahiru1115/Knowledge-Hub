@@ -1,0 +1,32 @@
+# The public face of the VM when the web app is on Vercel (Doc 02 §10.2): TLS, and /api/* forwarded to the Core API.
+# Nothing else is exposed: the AI service and Ollama are not reachable from here.
+{$API_HOST} {
+	encode zstd gzip
+
+	# Readiness shows internal state; only the load balancer's liveness check is public.
+	@internal path /health/ready
+	respond @internal 404
+
+	request_body {
+		max_size 2MB
+	}
+
+	handle /api/* {
+		reverse_proxy core-api:8080 {
+			# Answers are streamed (chat uses server-sent events): send each chunk as it arrives.
+			flush_interval -1
+			# Caddy adds X-Forwarded-For; the Core API believes this hop only (Proxy__TrustForwardedHeaders).
+			transport http {
+				response_header_timeout 130s
+			}
+		}
+	}
+	handle /health/live {
+		reverse_proxy core-api:8080
+	}
+	handle {
+		respond "Not found" 404
+	}
+
+	header -Server
+}

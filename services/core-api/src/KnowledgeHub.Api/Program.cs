@@ -108,7 +108,22 @@ builder.Services.AddKnowledgeHubRateLimiting();
 builder.Logging.AddConsole(o => o.FormatterName = KhJsonConsoleFormatter.FormatterName).AddConsoleFormatter<KhJsonConsoleFormatter, ConsoleFormatterOptions>();
 builder.AddKnowledgeHubTelemetry();
 
+// Behind a reverse proxy the connection's address is the proxy's. With Proxy:TrustForwardedHeaders the address and
+// scheme the proxy reports are used instead, so per-IP rate limits and audit records see the real client. Only turn it
+// on when the API cannot be reached except through that proxy (the compose file does not publish its port).
+var trustProxy = builder.Configuration.GetValue<bool>("Proxy:TrustForwardedHeaders");
+if (trustProxy)
+    builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(o =>
+    {
+        o.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+        o.KnownIPNetworks.Clear();
+        o.KnownProxies.Clear();
+        o.ForwardLimit = 1;   // believe only the proxy next to us, not whatever the client put in the header before it
+    });
+
 var app = builder.Build();
+
+if (trustProxy) app.UseForwardedHeaders();
 
 app.UseMiddleware<SecurityHeadersMiddleware>();   // first, so error responses carry the headers too
 app.UseExceptionHandler();

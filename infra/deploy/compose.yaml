@@ -1,0 +1,104 @@
+# Demo deployment on one VM (Doc 02 §10.2). Run from this directory: `docker compose --env-file .env up -d`.
+# Postgres is NOT in here: it is Neon (or another managed database), created once with infra/db/init.sql.
+# Only Caddy publishes ports. The Core API, the AI service and Ollama are reachable on the internal network only.
+name: knowledge-hub
+x-restart: &restart
+  restart: unless-stopped
+services:
+  caddy:
+    <<: *restart
+    image: ${CADDY_IMAGE:-caddy:2}
+    ports: ["80:80", "443:443", "443:443/udp"]
+    environment:
+      API_HOST: ${API_HOST:?set API_HOST to the public host name of this VM}
+    volumes:
+      - ${CADDYFILE:-./Caddyfile}:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data        # certificates: keep, or Let's Encrypt rate limits bite
+      - caddy-config:/config
+    depends_on:
+      core-api: { condition: service_healthy }
+
+  core-api:
+    <<: *restart
+    image: ${REGISTRY:?}/knowledge-hub-core-api:${TAG:-latest}
+    depends_on:
+      migrate-core: { condition: service_completed_successfully }
+    environment:
+      ConnectionStrings__Core: ${CORE_APP_CONNECTION:?}
+      Auth__SigningKey: ${AUTH_SIGNING_KEY:?}
+      Auth__AdminEmail: ${ADMIN_EMAIL:?}
+      Auth__AppBaseUrl: ${APP_BASE_URL:?}
+      Auth__SecureCookies: "true"
+      # The API is reachable only through Caddy, so the client address it reports can be believed.
+      Proxy__TrustForwardedHeaders: "true"
+      AiService__Enabled: ${AI_ENABLED:-true}
+      AiService__BaseUrl: http://ai-service:8000
+      AiService__JwtSecret: ${SERVICE_JWT_SECRET:?}
+      Smtp__Host: ${SMTP_HOST:?}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__StartTls: "true"
+      Smtp__Username: ${SMTP_USERNAME:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__From: ${SMTP_FROM:?}
+      Telemetry__SampleRatio: ${TRACE_SAMPLE_RATIO:-0.2}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_EXPORTER_OTLP_PROTOCOL: ${OTEL_EXPORTER_OTLP_PROTOCOL:-http/protobuf}
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /health/live HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q live <&3'"]
+      interval: 15s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
+    networks: [internal]
+
+  ai-service:
+    <<: *restart
+    image: ${REGISTRY:?}/knowledge-hub-ai-service:${TAG:-latest}
+    depends_on:
+      migrate-ai: { condition: service_completed_successfully }
+    environment:
+      AI_DATABASE_URL: ${AI_APP_DATABASE_URL:?}
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:?}
+      AI_PROFILE: ${AI_PROFILE:-free}
+      OLLAMA_BASE_URL: http://ollama:11434
+      LLM_MODEL: ${LLM_MODEL:-}
+      MODEL_CACHE_DIR: /models
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      PRICE_TABLE: ${PRICE_TABLE:-}
+      DAILY_COST_CAP_USD: ${DAILY_COST_CAP_USD:-0.50}
+      MONTHLY_COST_CAP_USD: ${MONTHLY_COST_CAP_USD:-10}
+    volumes: [models:/models]       # the embedding model is downloaded once and kept
+    networks: [internal]
+
+  ollama:
+    <<: *restart
+    image: ollama/ollama:latest
+    volumes: [ollama:/root/.ollama]
+    networks: [internal]
+    profiles: ["free-ai"]            # not started with the Claude profile: `--profile free-ai`
+
+  # One-shot jobs: run before the services that need them, as the migrator roles (Doc 02 §7.4).
+  migrate-core:
+    image: ${REGISTRY:?}/knowledge-hub-migrate-core:${TAG:-latest}
+    environment:
+      CORE_MIGRATOR_CONNECTION: ${CORE_MIGRATOR_CONNECTION:?}
+    restart: "no"
+    networks: [internal]
+
+  migrate-ai:
+    image: ${REGISTRY:?}/knowledge-hub-ai-service:${TAG:-latest}
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      AI_MIGRATOR_DATABASE_URL: ${AI_MIGRATOR_DATABASE_URL:?}
+    restart: "no"
+    networks: [internal]
+
+networks:
+  internal: {}
+volumes:
+  caddy-data:
+  caddy-config:
+  ollama:
+  models:

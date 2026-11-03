@@ -1,0 +1,105 @@
+name: deploy
+# Builds the arm64 images for the demo VM, pushes them to GitHub Container Registry, and updates the VM.
+# Nothing runs until the repository variable DEPLOY_ENABLED is "true" and the secrets below exist, so a fork or a
+# fresh clone does not fail on it. See infra/deploy/README.md for the one-time setup.
+on:
+  push:
+    branches: [main]
+    paths: ["services/**", "infra/deploy/**", ".github/workflows/deploy.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
+  packages: write
+concurrency:
+  group: deploy
+  cancel-in-progress: false   # let a running rollout finish
+env:
+  REGISTRY: ghcr.io/${{ github.repository_owner }}
+jobs:
+  images:
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: tag
+        run: echo "tag=${GITHUB_SHA::12}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Lower-case registry name
+        run: echo "REGISTRY=$(echo "$REGISTRY" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_ENV"
+      - name: Core API
+        uses: docker/build-push-action@v6
+        with:
+          context: services/core-api
+          target: runtime
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/knowledge-hub-core-api:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=core-api
+          cache-to: type=gha,scope=core-api,mode=max
+      - name: Core API migrations
+        uses: docker/build-push-action@v6
+        with:
+          context: services/core-api
+          target: migrate
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/knowledge-hub-migrate-core:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=core-api
+      - name: AI service (also runs the AI migrations)
+        uses: docker/build-push-action@v6
+        with:
+          context: services/ai-service
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/knowledge-hub-ai-service:${{ steps.tag.outputs.tag }}
+          cache-from: type=gha,scope=ai-service
+          cache-to: type=gha,scope=ai-service,mode=max
+  rollout:
+    needs: images
+    runs-on: ubuntu-latest
+    environment: demo   # lets the project owner require approval before production changes
+    steps:
+      - uses: actions/checkout@v4
+      - name: Copy the deployment files
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          source: infra/deploy/compose.yaml,infra/deploy/Caddyfile,infra/deploy/Caddyfile.same-origin
+          target: ~/knowledge-hub
+          strip_components: 2
+      - name: Pull, migrate, restart
+        uses: appleboy/ssh-action@v1.2.0
+        env:
+          TAG: ${{ needs.images.outputs.tag }}
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          envs: TAG
+          script_stop: true
+          script: |
+            cd ~/knowledge-hub
+            sed -i "s|^TAG=.*|TAG=$TAG|" .env
+            docker compose --env-file .env pull
+            docker compose --env-file .env run --rm migrate-core
+            docker compose --env-file .env run --rm migrate-ai
+            docker compose --env-file .env up -d --remove-orphans
+            docker image prune -f
+      - name: Check that it came up
+        run: |
+          for i in $(seq 1 30); do
+            curl -fsS "https://${{ secrets.DEPLOY_API_HOST }}/health/live" && exit 0
+            sleep 5
+          done
+          echo "The API did not answer /health/live in time" >&2
+          exit 1

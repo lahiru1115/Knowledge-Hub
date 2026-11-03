@@ -32,9 +32,13 @@ public sealed class TestClient
         });
     }
 
+    /// <summary>Headers added to every request, for example X-Forwarded-For.</summary>
+    public Dictionary<string, string> DefaultHeaders { get; } = [];
+
     public async Task<HttpResponseMessage> SendAsync(HttpMethod method, string path, object? body = null, bool csrf = true)
     {
         using var request = new HttpRequestMessage(method, path);
+        foreach (var (k, v) in DefaultHeaders) request.Headers.TryAddWithoutValidation(k, v);
         if (body is not null) request.Content = JsonContent.Create(body, options: Json);
         if (csrf && Csrf is not null) request.Headers.Add("X-CSRF-Token", Csrf);
         var response = await _http.SendAsync(request, TestContext.Current.CancellationToken);
