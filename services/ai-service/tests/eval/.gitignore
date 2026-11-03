@@ -1,0 +1,3 @@
+# Reports from real runs are machine-specific; the decision is recorded in docs/adr/011.
+results/*
+!results/.gitkeep

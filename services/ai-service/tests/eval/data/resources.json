@@ -1,0 +1,182 @@
+[
+ {
+  "id": "r01",
+  "title": "B-trees explained",
+  "collection": "Data structures",
+  "text": "B-trees keep their keys sorted and let each node hold many children, so the tree stays very shallow. Every node is sized to fit a disk page, which means finding a key takes only a few disk reads even for millions of records. When a node overflows it splits in two and pushes the middle key up to its parent; when it underflows it borrows from or merges with a sibling. Databases and file systems use B-trees and the B+ tree variant, where all values live in the leaves and the leaves are linked for fast range scans."
+ },
+ {
+  "id": "r02",
+  "title": "Hash tables and collisions",
+  "collection": "Data structures",
+  "text": "A hash table maps a key to a bucket using a hash function, giving average constant-time lookups. Two keys can land in the same bucket, which is called a collision. Chaining stores a list of entries in each bucket. Open addressing probes for the next free slot, using linear probing, quadratic probing or double hashing. The load factor is the number of entries divided by the number of buckets; when it passes a threshold such as 0.75 the table is resized and every key is rehashed."
+ },
+ {
+  "id": "r03",
+  "title": "Sorting: quicksort versus mergesort",
+  "collection": "Data structures",
+  "text": "Quicksort picks a pivot, partitions the array into smaller and larger elements and recurses on both sides. It averages O(n log n) but degrades to O(n squared) when the pivot is consistently the smallest or largest element, which random or median-of-three pivots avoid. Mergesort always splits in half and merges the sorted halves, guaranteeing O(n log n) and stability, but it needs O(n) extra memory. Quicksort sorts in place and is usually faster in practice because of cache behaviour."
+ },
+ {
+  "id": "r04",
+  "title": "Dijkstra's shortest path algorithm",
+  "collection": "Data structures",
+  "text": "Dijkstra's algorithm finds the shortest paths from one source node to every other node in a graph with non-negative edge weights. It keeps a priority queue of nodes ordered by their current best distance. At each step it removes the node with the smallest distance, marks it final, and relaxes its outgoing edges by updating neighbours whose distance can be improved. With a binary heap the running time is O((V + E) log V). Negative weights break it; use Bellman-Ford instead."
+ },
+ {
+  "id": "r05",
+  "title": "Processes and threads",
+  "collection": "Systems",
+  "text": "A process is a running program with its own address space, file descriptors and resources. A thread is a unit of execution inside a process; the threads of one process share its memory and open files but each has its own stack and registers. Creating a thread is cheaper than creating a process, and threads communicate through shared memory, which needs locks to avoid races. A context switch saves one thread's registers and restores another's, and switching between processes is more expensive because the memory mappings change as well."
+ },
+ {
+  "id": "r06",
+  "title": "Virtual memory and paging",
+  "collection": "Systems",
+  "text": "Virtual memory gives every process its own address space, split into fixed-size pages that the operating system maps to physical frames through a page table. The TLB caches recent translations so most accesses avoid walking the table. If a program touches a page that is not in memory, the hardware raises a page fault; the kernel finds the page on disk, loads it into a free frame, updates the page table and restarts the instruction. When memory is full a replacement policy such as LRU chooses a page to evict, and too many faults cause thrashing."
+ },
+ {
+  "id": "r07",
+  "title": "TCP handshake and congestion control",
+  "collection": "Systems",
+  "text": "TCP opens a connection with a three-way handshake. The client sends SYN, the server answers SYN-ACK, and the client replies ACK, after which both sides have agreed on initial sequence numbers. Data is acknowledged and retransmitted if lost. Congestion control stops a sender from flooding the network: slow start doubles the congestion window each round trip until a threshold, then congestion avoidance grows it by one segment per round trip, and a loss cuts the window sharply."
+ },
+ {
+  "id": "r08",
+  "title": "How DNS resolution works",
+  "collection": "Systems",
+  "text": "When a browser needs an address it asks a recursive resolver, usually run by the internet provider. If the answer is not cached the resolver asks a root server, which points to the top-level domain servers for .com, which point to the authoritative name server for the domain. The authoritative server returns the A or AAAA record. Each answer carries a time to live that controls how long it may be cached, which is why DNS changes take time to spread."
+ },
+ {
+  "id": "r09",
+  "title": "Gradient descent",
+  "collection": "Machine learning",
+  "text": "Gradient descent minimises a loss function by repeatedly stepping in the direction opposite to the gradient. The learning rate sets the step size: too large and the loss oscillates or diverges, too small and training is very slow. Stochastic gradient descent estimates the gradient from a single example and mini-batch gradient descent from a small batch, which is faster and adds helpful noise. Momentum and Adam adapt the steps to smooth progress through ravines and flat regions."
+ },
+ {
+  "id": "r10",
+  "title": "Overfitting and regularisation",
+  "collection": "Machine learning",
+  "text": "A model overfits when it memorises noise in the training data and performs worse on new data; the tell-tale sign is a low training error with a high validation error. Remedies include collecting more data, simplifying the model, early stopping, dropout, and regularisation, where L2 regularisation penalises large weights and L1 pushes weights to zero. K-fold cross-validation estimates how well a model generalises by training on several splits of the data and averaging the validation scores."
+ },
+ {
+  "id": "r11",
+  "title": "Database normalisation",
+  "collection": "Databases",
+  "text": "Normalisation removes redundancy so each fact is stored once. First normal form requires atomic column values and no repeating groups. Second normal form requires every non-key column to depend on the whole primary key, which matters for composite keys. Third normal form removes columns that depend on other non-key columns instead of the key. Denormalising on purpose can speed up reads at the cost of harder updates."
+ },
+ {
+  "id": "r12",
+  "title": "ACID transactions and isolation levels",
+  "collection": "Databases",
+  "text": "ACID stands for atomicity, consistency, isolation and durability. Isolation levels trade safety for concurrency. Read uncommitted allows dirty reads. Read committed prevents dirty reads because a transaction only sees data that has been committed, but a repeated read can return different values. Repeatable read keeps a stable snapshot for the whole transaction. Serializable behaves as if transactions ran one after another and may abort conflicting ones, which the application must retry."
+ },
+ {
+  "id": "r13",
+  "title": "PostgreSQL connection pooling",
+  "collection": "Databases",
+  "text": "Every PostgreSQL connection is a separate server process, so thousands of idle connections waste memory. A pooler such as PgBouncer keeps a small number of real connections and shares them among many clients, either per session, per transaction or per statement. A common rule of thumb for the pool size is the number of CPU cores times two plus the number of disk spindles; more connections than the database can run at once only add context switching. Transaction pooling breaks features that rely on session state, such as prepared statements and advisory locks."
+ },
+ {
+  "id": "r14",
+  "title": "PostgreSQL indexes and EXPLAIN",
+  "collection": "Databases",
+  "text": "The default B-tree index handles equality and range queries. GIN indexes suit full-text search and jsonb containment, GiST suits geometric data, and BRIN suits huge append-only tables ordered by time. Run EXPLAIN ANALYZE to see the real plan, row counts and timing; a sequential scan on a large table with a selective filter usually means a missing index. A partial index covers only the rows matching a condition and stays small."
+ },
+ {
+  "id": "r15",
+  "title": "REST API design checklist",
+  "collection": "Backend",
+  "text": "Use nouns for resources and HTTP methods for actions. GET is safe and idempotent, PUT and DELETE are idempotent, and POST is not. Return 201 with a Location header when creating something, 204 when there is nothing to send back, 404 for a missing resource and 409 for a conflict. Paginate list endpoints with a page size limit, and return errors in one consistent format such as problem details. Version the API in the path or a header."
+ },
+ {
+  "id": "r16",
+  "title": "Docker multi-stage builds",
+  "collection": "DevOps",
+  "text": "A multi-stage build uses one image to compile the application and a second, much smaller image to run it, copying only the built output across. This keeps compilers and source code out of the final image, which makes it small and reduces the attack surface. Order the Dockerfile so rarely changing steps such as installing dependencies come first; Docker caches each layer and rebuilds only from the first changed one. A .dockerignore file keeps junk out of the build context."
+ },
+ {
+  "id": "r17",
+  "title": "Git rebase versus merge",
+  "collection": "DevOps",
+  "text": "Merge joins two branches with a merge commit and keeps the true history. Rebase replays your commits on top of another branch, producing a straight line without merge commits. Rebasing rewrites commit hashes, so never rebase a branch that other people have already pulled. A common workflow is to rebase a feature branch onto main before opening a pull request, then merge it with a squash or a merge commit. Use git reflog to recover from a bad rebase."
+ },
+ {
+  "id": "r18",
+  "title": "Python asyncio basics",
+  "collection": "Backend",
+  "text": "Asyncio runs many tasks on one thread with a single event loop. A coroutine defined with async def runs only when awaited, and each await is a point where the loop can switch to another task. Use asyncio.gather to run coroutines concurrently and wait for all results. Blocking calls such as time.sleep or a synchronous database driver freeze the whole loop; use await asyncio.sleep, an async driver, or run_in_executor for blocking work."
+ },
+ {
+  "id": "r19",
+  "title": "Caching strategies",
+  "collection": "Backend",
+  "text": "In the cache-aside pattern the application checks the cache first, and on a miss loads the data from the database and stores it in the cache for next time. Write-through updates the cache and the database together; write-behind queues database writes for later. A time to live bounds how stale an entry can be, and explicit invalidation on update keeps it fresh. A cache stampede happens when a popular key expires and many requests rebuild it at once; locking or early refresh prevents it."
+ },
+ {
+  "id": "r20",
+  "title": "The test pyramid",
+  "collection": "Backend",
+  "text": "Many fast unit tests at the base check small pieces in isolation. Fewer integration tests in the middle check that components work together, for example the API against a real database. A small number of end-to-end tests at the top drive the whole system through the user interface. The higher the test, the slower and more fragile it is, so push as much checking as possible down the pyramid. Mock only what you do not own."
+ },
+ {
+  "id": "r21",
+  "title": "JWT access tokens and refresh token rotation",
+  "collection": "Backend",
+  "text": "A JSON Web Token is signed so the server can verify it without a database lookup, but it cannot be revoked before it expires, so keep access tokens short-lived, around fifteen minutes. A longer-lived refresh token obtains new access tokens. With refresh token rotation every use issues a new refresh token and invalidates the old one; if an old token is ever presented again the server treats it as stolen and revokes the whole family. Store tokens in httpOnly cookies rather than local storage."
+ },
+ {
+  "id": "r22",
+  "title": "CORS explained",
+  "collection": "Backend",
+  "text": "Browsers block a page from reading responses of another origin unless that server opts in with Cross-Origin Resource Sharing headers. For simple requests the server answers with Access-Control-Allow-Origin. For requests with custom headers or methods such as PUT, the browser first sends a preflight OPTIONS request and the server must allow the method and headers. Credentials need Access-Control-Allow-Credentials and a specific origin, never a wildcard."
+ },
+ {
+  "id": "r23",
+  "title": "Rate limiting with a token bucket",
+  "collection": "Backend",
+  "text": "A token bucket allows bursts while enforcing an average rate. The bucket holds up to a fixed number of tokens and refills at a steady rate; every request removes one token and is rejected, usually with HTTP 429 and a Retry-After header, when the bucket is empty. Fixed windows are simpler but allow double the limit around a window boundary, and sliding windows smooth that out. Limit per user or per IP address, and keep the counters in a shared store such as Redis when there are several servers."
+ },
+ {
+  "id": "r24",
+  "title": "Message queues and idempotent consumers",
+  "collection": "Backend",
+  "text": "Most queues guarantee at-least-once delivery, so a message can arrive twice after a crash or a timeout. Make consumers idempotent so handling a message twice has the same result as handling it once, for example by recording processed message ids or using upserts. The transactional outbox pattern writes the event in the same database transaction as the data change, and a separate worker publishes it, so a change is never saved without its event. Dead-letter queues hold messages that keep failing."
+ },
+ {
+  "id": "r25",
+  "title": "Kubernetes basics",
+  "collection": "DevOps",
+  "text": "A pod is the smallest deployable unit and holds one or more containers that share a network address. A deployment declares how many replicas of a pod should run and replaces them gradually during an update. A service gives a set of pods one stable address and load balances across them. ConfigMaps and secrets inject configuration, and readiness probes tell the cluster when a pod can receive traffic."
+ },
+ {
+  "id": "r26",
+  "title": "Preventing SQL injection",
+  "collection": "Backend",
+  "text": "SQL injection happens when user input is concatenated into a query so that it changes the meaning of the statement. The fix is to use parameterised queries or prepared statements, which send the query and the values separately so input is never parsed as SQL. Object-relational mappers parameterise by default, but raw query helpers need care. Also give the application a database account with the least privilege it needs, and never build table or column names from user input."
+ },
+ {
+  "id": "r27",
+  "title": "Linux file permissions",
+  "collection": "Systems",
+  "text": "Every file has an owner, a group and permissions for the owner, the group and everyone else, each made of read, write and execute bits. The command chmod 755 gives the owner full access and everyone else read and execute; chmod 644 is typical for ordinary files. The execute bit on a directory allows entering it. chown changes the owner and group, and the setuid bit makes a program run with its owner's privileges."
+ },
+ {
+  "id": "r28",
+  "title": "HTTP caching with ETag",
+  "collection": "Backend",
+  "text": "An ETag is a fingerprint of a response. The browser stores it and sends it back in an If-None-Match header on the next request; if the content has not changed the server answers 304 Not Modified with no body, saving bandwidth. Cache-Control: max-age tells the browser how long it may reuse a response without asking at all, and no-store forbids caching. Fingerprinted asset file names can be cached for a year."
+ },
+ {
+  "id": "r29",
+  "title": "Sourdough starter feeding schedule",
+  "collection": "Personal",
+  "text": "Keep the starter at room temperature and feed it every twelve hours: discard all but fifty grams, then add fifty grams of flour and fifty grams of water. After a few days it should double in size within six hours of feeding and smell pleasantly sour. For a weekly baker, store the starter in the fridge and feed it once a week, then give it two room-temperature feedings before baking. A warm kitchen speeds it up."
+ },
+ {
+  "id": "r30",
+  "title": "Twelve week marathon training plan",
+  "collection": "Personal",
+  "text": "Run four days a week: an easy run, a tempo run, intervals and one long run that grows by a mile or two each week, peaking at twenty miles three weeks before the race. Increase total weekly distance by no more than ten percent. The final three weeks taper, cutting volume while keeping some intensity. Practise fuelling during long runs with a gel every forty-five minutes and drink to thirst."
+ }
+]
