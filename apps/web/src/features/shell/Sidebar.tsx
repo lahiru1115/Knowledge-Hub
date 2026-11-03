@@ -9,9 +9,11 @@ import {
   MessagesSquare,
   Plus,
   Settings,
+  Shield,
 } from 'lucide-react'
 import { useState } from 'react'
 import { CollectionDialog } from '@/features/collections/CollectionDialog'
+import { useIsAdmin } from '@/features/admin/queries'
 import { collectionsQuery, tagsQuery } from '@/features/library/queries'
 import { cn } from '@/lib/utils'
 
@@ -34,6 +36,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const { data: collections } = useQuery(collectionsQuery)
   const { data: tags } = useQuery(tagsQuery)
   const [creating, setCreating] = useState(false)
+  const isAdmin = useIsAdmin()
   const topTags = [...(tags?.items ?? [])]
     .sort((a, b) => b.resource_count - a.resource_count)
     .slice(0, 8)
@@ -120,7 +123,12 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
         </div>
       )}
 
-      <div className="mt-auto">
+      <div className="mt-auto space-y-0.5">
+        {isAdmin && (
+          <Link to="/admin" className={item} activeProps={active}>
+            <Shield className="size-4" aria-hidden="true" /> {label('Admin')}
+          </Link>
+        )}
         <Link to="/settings/profile" className={item} activeProps={active}>
           <Settings className="size-4" aria-hidden="true" /> {label('Settings')}
         </Link>

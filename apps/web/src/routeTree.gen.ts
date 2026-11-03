@@ -15,10 +15,14 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as AppIndexRouteImport } from './routes/_app/index'
+import { Route as AppAdminRouteImport } from './routes/_app/admin'
 import { Route as AppAskRouteImport } from './routes/_app/ask'
 import { Route as AppLibraryRouteImport } from './routes/_app/library'
 import { Route as AppSettingsRouteImport } from './routes/_app/settings'
 import { Route as AppTagsRouteImport } from './routes/_app/tags'
+import { Route as AppAdminIndexRouteImport } from './routes/_app/admin.index'
+import { Route as AppAdminAiUsageRouteImport } from './routes/_app/admin.ai-usage'
+import { Route as AppAdminUsersRouteImport } from './routes/_app/admin.users'
 import { Route as AppAskIndexRouteImport } from './routes/_app/ask.index'
 import { Route as AppAskSessionIdRouteImport } from './routes/_app/ask.$sessionId'
 import { Route as AppCollectionsIndexRouteImport } from './routes/_app/collections.index'
@@ -60,6 +64,11 @@ const AppIndexRoute = AppIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AppRoute,
 } as any)
+const AppAdminRoute = AppAdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAskRoute = AppAskRouteImport.update({
   id: '/ask',
   path: '/ask',
@@ -79,6 +88,21 @@ const AppTagsRoute = AppTagsRouteImport.update({
   id: '/tags',
   path: '/tags',
   getParentRoute: () => AppRoute,
+} as any)
+const AppAdminIndexRoute = AppAdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminAiUsageRoute = AppAdminAiUsageRouteImport.update({
+  id: '/ai-usage',
+  path: '/ai-usage',
+  getParentRoute: () => AppAdminRoute,
+} as any)
+const AppAdminUsersRoute = AppAdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AppAdminRoute,
 } as any)
 const AppAskIndexRoute = AppAskIndexRouteImport.update({
   id: '/',
@@ -143,16 +167,20 @@ export interface FileRoutesByFullPath {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/admin': typeof AppAdminRouteWithChildren
   '/ask': typeof AppAskRouteWithChildren
   '/library': typeof AppLibraryRoute
   '/settings': typeof AppSettingsRouteWithChildren
   '/tags': typeof AppTagsRoute
+  '/admin/ai-usage': typeof AppAdminAiUsageRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/ask/$sessionId': typeof AppAskSessionIdRoute
   '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/admin/': typeof AppAdminIndexRoute
   '/ask/': typeof AppAskIndexRoute
   '/collections/': typeof AppCollectionsIndexRoute
   '/settings/': typeof AppSettingsIndexRoute
@@ -167,12 +195,15 @@ export interface FileRoutesByTo {
   '/library': typeof AppLibraryRoute
   '/tags': typeof AppTagsRoute
   '/': typeof AppIndexRoute
+  '/admin/ai-usage': typeof AppAdminAiUsageRoute
+  '/admin/users': typeof AppAdminUsersRoute
   '/ask/$sessionId': typeof AppAskSessionIdRoute
   '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
   '/settings/data': typeof AppSettingsDataRoute
   '/settings/profile': typeof AppSettingsProfileRoute
+  '/admin': typeof AppAdminIndexRoute
   '/ask': typeof AppAskIndexRoute
   '/collections': typeof AppCollectionsIndexRoute
   '/settings': typeof AppSettingsIndexRoute
@@ -186,17 +217,21 @@ export interface FileRoutesById {
   '/login': typeof LoginRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/_app/admin': typeof AppAdminRouteWithChildren
   '/_app/ask': typeof AppAskRouteWithChildren
   '/_app/library': typeof AppLibraryRoute
   '/_app/settings': typeof AppSettingsRouteWithChildren
   '/_app/tags': typeof AppTagsRoute
   '/_app/': typeof AppIndexRoute
+  '/_app/admin/ai-usage': typeof AppAdminAiUsageRoute
+  '/_app/admin/users': typeof AppAdminUsersRoute
   '/_app/ask/$sessionId': typeof AppAskSessionIdRoute
   '/_app/collections/$id': typeof AppCollectionsIdRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
   '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/profile': typeof AppSettingsProfileRoute
+  '/_app/admin/': typeof AppAdminIndexRoute
   '/_app/ask/': typeof AppAskIndexRoute
   '/_app/collections/': typeof AppCollectionsIndexRoute
   '/_app/settings/': typeof AppSettingsIndexRoute
@@ -211,16 +246,20 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/admin'
     | '/ask'
     | '/library'
     | '/settings'
     | '/tags'
+    | '/admin/ai-usage'
+    | '/admin/users'
     | '/ask/$sessionId'
     | '/collections/$id'
     | '/settings/ai'
     | '/settings/appearance'
     | '/settings/data'
     | '/settings/profile'
+    | '/admin/'
     | '/ask/'
     | '/collections/'
     | '/settings/'
@@ -235,12 +274,15 @@ export interface FileRouteTypes {
     | '/library'
     | '/tags'
     | '/'
+    | '/admin/ai-usage'
+    | '/admin/users'
     | '/ask/$sessionId'
     | '/collections/$id'
     | '/settings/ai'
     | '/settings/appearance'
     | '/settings/data'
     | '/settings/profile'
+    | '/admin'
     | '/ask'
     | '/collections'
     | '/settings'
@@ -253,17 +295,21 @@ export interface FileRouteTypes {
     | '/login'
     | '/register'
     | '/reset-password'
+    | '/_app/admin'
     | '/_app/ask'
     | '/_app/library'
     | '/_app/settings'
     | '/_app/tags'
     | '/_app/'
+    | '/_app/admin/ai-usage'
+    | '/_app/admin/users'
     | '/_app/ask/$sessionId'
     | '/_app/collections/$id'
     | '/_app/settings/ai'
     | '/_app/settings/appearance'
     | '/_app/settings/data'
     | '/_app/settings/profile'
+    | '/_app/admin/'
     | '/_app/ask/'
     | '/_app/collections/'
     | '/_app/settings/'
@@ -323,6 +369,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppIndexRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/admin': {
+      id: '/_app/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AppAdminRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/ask': {
       id: '/_app/ask'
       path: '/ask'
@@ -350,6 +403,27 @@ declare module '@tanstack/react-router' {
       fullPath: '/tags'
       preLoaderRoute: typeof AppTagsRouteImport
       parentRoute: typeof AppRoute
+    }
+    '/_app/admin/': {
+      id: '/_app/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AppAdminIndexRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/ai-usage': {
+      id: '/_app/admin/ai-usage'
+      path: '/ai-usage'
+      fullPath: '/admin/ai-usage'
+      preLoaderRoute: typeof AppAdminAiUsageRouteImport
+      parentRoute: typeof AppAdminRoute
+    }
+    '/_app/admin/users': {
+      id: '/_app/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AppAdminUsersRouteImport
+      parentRoute: typeof AppAdminRoute
     }
     '/_app/ask/': {
       id: '/_app/ask/'
@@ -431,6 +505,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface AppAdminRouteChildren {
+  AppAdminAiUsageRoute: typeof AppAdminAiUsageRoute
+  AppAdminUsersRoute: typeof AppAdminUsersRoute
+  AppAdminIndexRoute: typeof AppAdminIndexRoute
+}
+
+const AppAdminRouteChildren: AppAdminRouteChildren = {
+  AppAdminAiUsageRoute: AppAdminAiUsageRoute,
+  AppAdminUsersRoute: AppAdminUsersRoute,
+  AppAdminIndexRoute: AppAdminIndexRoute,
+}
+
+const AppAdminRouteWithChildren = AppAdminRoute._addFileChildren(
+  AppAdminRouteChildren,
+)
+
 interface AppAskRouteChildren {
   AppAskSessionIdRoute: typeof AppAskSessionIdRoute
   AppAskIndexRoute: typeof AppAskIndexRoute
@@ -469,6 +559,7 @@ const AppSettingsRouteWithChildren = AppSettingsRoute._addFileChildren(
 )
 
 interface AppRouteChildren {
+  AppAdminRoute: typeof AppAdminRouteWithChildren
   AppAskRoute: typeof AppAskRouteWithChildren
   AppLibraryRoute: typeof AppLibraryRoute
   AppSettingsRoute: typeof AppSettingsRouteWithChildren
@@ -479,6 +570,7 @@ interface AppRouteChildren {
 }
 
 const AppRouteChildren: AppRouteChildren = {
+  AppAdminRoute: AppAdminRouteWithChildren,
   AppAskRoute: AppAskRouteWithChildren,
   AppLibraryRoute: AppLibraryRoute,
   AppSettingsRoute: AppSettingsRouteWithChildren,

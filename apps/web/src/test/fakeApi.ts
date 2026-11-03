@@ -80,6 +80,19 @@ export interface FakeDb {
   ai: FakeAi
   /** What the dashboard cannot work out from the data above. */
   dash: { triedSearch: boolean; askedQuestion: boolean; dismissed: boolean; weekly: number[] }
+  /** The administrator's view: every user, and the AI service's usage rows (which answer 503 when `usageDown`). */
+  admin: { users: AdminUser[]; usage: UsageRow[]; usageDown: boolean }
+}
+
+export type AdminUser = components['schemas']['AdminUser']
+export interface UsageRow {
+  date: string
+  user_id?: string
+  operation: 'summarize' | 'suggest_tags' | 'embed' | 'search' | 'chat'
+  calls: number
+  tokens_in: number
+  tokens_out: number
+  cost_usd: number
 }
 
 export type Preview = components['schemas']['MetadataPreview']
@@ -175,6 +188,7 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       messages: {},
     },
     dash: { triedSearch: false, askedQuestion: false, dismissed: false, weekly: [] },
+    admin: { users: [], usage: [], usageDown: false },
     finishMetadata: (id, patch = {}) => {
       const r = find(id)
       if (r) replace({ ...r, metadata_status: 'ready', metadata_error: null, ...patch })
@@ -695,6 +709,40 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       const old = String(params.id).replace('tag-', '')
       db.resources = db.resources.map((r) => ({ ...r, tags: r.tags.filter((t) => t !== old) }))
       return new HttpResponse(null, { status: 204 })
+    }),
+    http.get(`${API}/admin/users`, async ({ request }) => {
+      await record(request, '/admin/users')
+      const url = new URL(request.url)
+      const q = (url.searchParams.get('q') ?? '').toLowerCase()
+      const page = Number(url.searchParams.get('page') ?? '1')
+      const size = Number(url.searchParams.get('page_size') ?? '20')
+      const found = db.admin.users.filter((u) => u.email.toLowerCase().includes(q))
+      return HttpResponse.json({
+        items: found.slice((page - 1) * size, page * size),
+        page,
+        page_size: size,
+        total: found.length,
+      })
+    }),
+    http.patch(`${API}/admin/users/:id`, async ({ request, params }) => {
+      await record(request, '/admin/users/:id')
+      const f = failure('PATCH', '/admin/users/:id')
+      if (f) return f
+      const body = (await request.json()) as { is_disabled: boolean }
+      const target = db.admin.users.find((u) => u.id === params.id)
+      if (!target) return problem(404, 'not_found')
+      const next = { ...target, is_disabled: body.is_disabled }
+      db.admin.users = db.admin.users.map((u) => (u.id === next.id ? next : u))
+      return HttpResponse.json(next)
+    }),
+    http.get(`${API}/admin/ai-usage`, async ({ request }) => {
+      await record(request, '/admin/ai-usage')
+      if (db.admin.usageDown) return problem(503, 'ai_unavailable')
+      const id = new URL(request.url).searchParams.get('user_id')
+      const rows = id
+        ? db.admin.usage.filter((r) => r.user_id === id)
+        : db.admin.usage.map((r) => ({ ...r, user_id: undefined }))
+      return HttpResponse.json({ items: rows })
     }),
   )
   return db

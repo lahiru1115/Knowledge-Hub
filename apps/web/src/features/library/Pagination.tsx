@@ -14,10 +14,19 @@ interface Props {
   total: number
   onPage: (page: number) => void
   onPageSize: (size: number) => void
+  /** What the page-size choice is called for assistive technology. */
+  label?: string
 }
 
 /** Numbered offset pages with a page-size choice (FR-SRCH-04, Doc 03 §5.2). */
-export function Pagination({ page, pageSize, total, onPage, onPageSize }: Props) {
+export function Pagination({
+  page,
+  pageSize,
+  total,
+  onPage,
+  onPageSize,
+  label = 'Resources per page',
+}: Props) {
   const pages = Math.max(1, Math.ceil(total / pageSize))
   return (
     <nav aria-label="Pagination" className="flex flex-wrap items-center justify-between gap-3 py-3">
@@ -52,7 +61,7 @@ export function Pagination({ page, pageSize, total, onPage, onPageSize }: Props)
           onPageSize(Number(v))
         }}
       >
-        <SelectTrigger size="sm" aria-label="Resources per page" className="w-36">
+        <SelectTrigger size="sm" aria-label={label} className="w-36">
           <SelectValue />
         </SelectTrigger>
         <SelectContent>

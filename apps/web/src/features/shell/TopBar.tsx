@@ -117,6 +117,11 @@ export function TopBar({ onToggleSidebar, sidebarCollapsed, onShowShortcuts }: P
             <DropdownMenuItem asChild className="md:hidden">
               <Link to="/tags">Tags</Link>
             </DropdownMenuItem>
+            {me.role === 'admin' && (
+              <DropdownMenuItem asChild className="md:hidden">
+                <Link to="/admin">Admin</Link>
+              </DropdownMenuItem>
+            )}
             <DropdownMenuSeparator />
             <DropdownMenuLabel>Theme</DropdownMenuLabel>
             <DropdownMenuRadioGroup
