@@ -22,6 +22,9 @@ public sealed class User
     public string DisplayName { get; set; } = "";
     public UserRole Role { get; set; } = UserRole.Member;
     public bool IsDisabled { get; set; }
+    /// <summary>Onboarding milestones that cannot be read off the data (FR-DASH-05): set once, on first use.</summary>
+    public bool TriedSearch { get; set; }
+    public bool AskedQuestion { get; set; }
     public UserPreferences Preferences { get; set; } = new();
     /// <summary>Replaced when the user is disabled or changes/resets their password (Doc 02 §9.1).</summary>
     public Guid SecurityStamp { get; set; } = Guid.NewGuid();

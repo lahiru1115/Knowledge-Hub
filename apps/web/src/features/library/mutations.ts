@@ -12,6 +12,7 @@ export function invalidateLibrary(qc: QueryClient) {
     qc.invalidateQueries({ queryKey: ['resource'] }),
     qc.invalidateQueries({ queryKey: keys.collections }),
     qc.invalidateQueries({ queryKey: keys.tags }),
+    qc.invalidateQueries({ queryKey: ['dashboard'] }),
   ])
 }
 

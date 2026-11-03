@@ -3,6 +3,7 @@ using System.Text.Json;
 using KnowledgeHub.Api.Http;
 using KnowledgeHub.Application.Ai;
 using KnowledgeHub.Application.Common;
+using KnowledgeHub.Application.Insights;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Options;
 
@@ -31,11 +32,12 @@ public static class ChatEndpoints
     }
 
     private static async Task Ask(
-        Guid id, ChatAskRequest body, HttpContext http, ICurrentUser user, ChatService chats, IOptions<KnowledgeHub.Infrastructure.Ai.AiOptions> ai)
+        Guid id, ChatAskRequest body, HttpContext http, ICurrentUser user, ChatService chats, Milestones milestones, IOptions<KnowledgeHub.Infrastructure.Ai.AiOptions> ai)
     {
         var ct = http.RequestAborted;
         // Problems before the answer starts are thrown here and become ordinary error responses.
         var events = await chats.AskAsync(user.UserId!.Value, id, body, ct);
+        await milestones.AskedAsync(user.UserId!.Value, ct);   // for the onboarding checklist
 
         http.Response.StatusCode = StatusCodes.Status200OK;
         http.Response.ContentType = "text/event-stream";

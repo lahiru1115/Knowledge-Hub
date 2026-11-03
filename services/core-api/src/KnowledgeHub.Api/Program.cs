@@ -47,6 +47,8 @@ builder.Services.AddScoped<CollectionService>();
 builder.Services.AddScoped<ResourceService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<MetadataPreviewService>();
+builder.Services.AddScoped<KnowledgeHub.Application.Insights.DashboardService>();
+builder.Services.AddScoped<KnowledgeHub.Application.Insights.Milestones>();
 builder.Services.AddScoped<KnowledgeHub.Application.Ai.AiFeaturesService>();
 builder.Services.AddScoped<KnowledgeHub.Application.Ai.ChatService>();
 builder.Services.AddScoped<IOutbox, OutboxWriter>();
@@ -120,6 +122,7 @@ api.MapIdentity();
 api.MapLibrary();
 api.MapAi();
 api.MapChat();
+api.MapInsights();
 
 app.Run();
 

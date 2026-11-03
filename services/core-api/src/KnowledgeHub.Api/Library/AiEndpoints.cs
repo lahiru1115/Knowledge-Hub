@@ -1,5 +1,6 @@
 using KnowledgeHub.Application.Ai;
 using KnowledgeHub.Application.Common;
+using KnowledgeHub.Application.Insights;
 using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace KnowledgeHub.Api.Library;
@@ -19,8 +20,12 @@ public static class AiEndpoints
         api.MapPost("/ai/tag-suggestions", async (TagSuggestionRequest body, ICurrentUser u, AiFeaturesService s, CancellationToken ct) =>
             TypedResults.Ok(await s.SuggestTagsAsync(u.UserId!.Value, body, ct))).RequireAuthorization();
         api.MapGet("/search/semantic", async (string? q, [Microsoft.AspNetCore.Mvc.FromQuery(Name = "page_size")] int? pageSize,
-                ICurrentUser u, AiFeaturesService s, CancellationToken ct) =>
-            TypedResults.Ok(await s.SemanticSearchAsync(u.UserId!.Value, q, pageSize, ct))).RequireAuthorization();
+                ICurrentUser u, AiFeaturesService s, Milestones milestones, CancellationToken ct) =>
+        {
+            var result = await s.SemanticSearchAsync(u.UserId!.Value, q, pageSize, ct);
+            await milestones.SearchedAsync(u.UserId!.Value, ct);
+            return TypedResults.Ok(result);
+        }).RequireAuthorization();
         api.MapGet("/resources/{id:guid}/related", async (Guid id, ICurrentUser u, AiFeaturesService s, CancellationToken ct) =>
             TypedResults.Ok(await s.RelatedAsync(u.UserId!.Value, id, ct))).RequireAuthorization();
         api.MapGet("/ai/status", async (AiFeaturesService s, CancellationToken ct) =>

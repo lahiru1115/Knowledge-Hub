@@ -175,7 +175,7 @@ describe('app shell', () => {
     expect(await screen.findByRole('dialog', { name: 'Add a resource' })).toBeInTheDocument()
   })
 
-  it('home shows how many resources there are and ways to start', async () => {
+  it('home shows the library in numbers', async () => {
     signedInSession()
     const c = makeCollection({ name: 'X' })
     fakeApi({
@@ -183,8 +183,8 @@ describe('app shell', () => {
       resources: [makeResource({ collection_id: c.id }), makeResource()],
     })
     renderApp('/')
-    expect(await screen.findByText('You have 2 saved resources.')).toBeInTheDocument()
-    expect(screen.getByRole('link', { name: 'Open your library' })).toHaveAttribute(
+    const numbers = await screen.findByRole('region', { name: 'Your library in numbers' })
+    expect(within(numbers).getByRole('link', { name: /2\s*resources/ })).toHaveAttribute(
       'href',
       '/library',
     )

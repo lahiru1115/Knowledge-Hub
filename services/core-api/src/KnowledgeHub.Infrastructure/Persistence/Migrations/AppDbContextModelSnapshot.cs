@@ -531,6 +531,10 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AskedQuestion")
+                        .HasColumnType("boolean")
+                        .HasColumnName("asked_question");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
@@ -584,6 +588,10 @@ namespace KnowledgeHub.Infrastructure.Persistence.Migrations
                     b.Property<Guid>("SecurityStamp")
                         .HasColumnType("uuid")
                         .HasColumnName("security_stamp");
+
+                    b.Property<bool>("TriedSearch")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tried_search");
 
                     b.Property<DateTimeOffset>("UpdatedAt")
                         .HasColumnType("timestamp with time zone")

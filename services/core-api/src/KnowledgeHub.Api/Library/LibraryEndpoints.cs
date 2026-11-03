@@ -1,5 +1,6 @@
 using KnowledgeHub.Application.Common;
 using KnowledgeHub.Api.Http;
+using KnowledgeHub.Application.Insights;
 using KnowledgeHub.Application.Library;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Microsoft.AspNetCore.Mvc;
@@ -55,9 +56,13 @@ public static class LibraryEndpoints
         });
 
         var resources = api.MapGroup("/resources").RequireAuthorization();
-        resources.MapGet("", async ([AsParameters] ResourceListQuery q, ICurrentUser u, ResourceService s, CancellationToken ct) =>
-            TypedResults.Ok(ToPage(await s.ListAsync(u.UserId!.Value,
-                new ResourceListRequest(q.Q, q.Type, q.Tag, q.CollectionId, q.Favourite, q.Archived, q.CreatedFrom, q.CreatedTo, q.Sort, q.Page, q.PageSize), ct))));
+        resources.MapGet("", async ([AsParameters] ResourceListQuery q, ICurrentUser u, ResourceService s, Milestones milestones, CancellationToken ct) =>
+        {
+            var page = ToPage(await s.ListAsync(u.UserId!.Value,
+                new ResourceListRequest(q.Q, q.Type, q.Tag, q.CollectionId, q.Favourite, q.Archived, q.CreatedFrom, q.CreatedTo, q.Sort, q.Page, q.PageSize), ct));
+            if (!string.IsNullOrWhiteSpace(q.Q)) await milestones.SearchedAsync(u.UserId!.Value, ct);   // for the onboarding checklist
+            return TypedResults.Ok(page);
+        });
         resources.MapPost("", async (ResourceCreate body, ICurrentUser u, ResourceService s, CancellationToken ct) =>
         {
             var created = await s.CreateAsync(u.UserId!.Value, body, ct);

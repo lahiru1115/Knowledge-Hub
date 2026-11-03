@@ -78,9 +78,12 @@ export interface FakeDb {
   /** Updates a resource as the background job would, without touching updated_at. */
   finishMetadata: (id: string, patch?: Partial<Resource>) => void
   ai: FakeAi
+  /** What the dashboard cannot work out from the data above. */
+  dash: { triedSearch: boolean; askedQuestion: boolean; dismissed: boolean; weekly: number[] }
 }
 
 export type Preview = components['schemas']['MetadataPreview']
+type Dashboard = components['schemas']['Dashboard']
 type ChatSession = components['schemas']['ChatSession']
 type ChatMessage = components['schemas']['ChatMessage']
 type Citation = components['schemas']['Citation']
@@ -171,6 +174,7 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       sessions: [],
       messages: {},
     },
+    dash: { triedSearch: false, askedQuestion: false, dismissed: false, weekly: [] },
     finishMetadata: (id, patch = {}) => {
       const r = find(id)
       if (r) replace({ ...r, metadata_status: 'ready', metadata_error: null, ...patch })
@@ -293,6 +297,50 @@ export function fakeApi(seed: { resources?: Resource[]; collections?: Collection
       const next = { ...r, metadata_status: 'pending' as const, metadata_error: null }
       replace(next)
       return HttpResponse.json(next, { status: 202 })
+    }),
+    http.get(`${API}/dashboard`, async ({ request }) => {
+      await record(request, '/dashboard')
+      const f = failure('GET', '/dashboard')
+      if (f) return f
+      const live = db.resources.filter((r) => !r.is_archived)
+      const count = (t: Resource['type']) => live.filter((r) => r.type === t).length
+      const monday = new Date()
+      monday.setUTCHours(0, 0, 0, 0)
+      monday.setUTCDate(monday.getUTCDate() - ((monday.getUTCDay() + 6) % 7))
+      const weekly_activity = Array.from({ length: 12 }, (_, i) => {
+        const d = new Date(monday)
+        d.setUTCDate(d.getUTCDate() - 7 * (11 - i))
+        return { week_start: d.toISOString().slice(0, 10), count: db.dash.weekly[i] ?? 0 }
+      })
+      const body: Dashboard = {
+        totals: {
+          resources: live.length,
+          collections: db.collections.length,
+          tags: new Set(db.resources.flatMap((r) => r.tags)).size,
+          favourites: live.filter((r) => r.is_favourite).length,
+        },
+        by_type: {
+          article: count('article'),
+          video: count('video'),
+          pdf: count('pdf'),
+          course: count('course'),
+          repo: count('repo'),
+          website: count('website'),
+          other: count('other'),
+        },
+        recent: [...live].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 5),
+        weekly_activity,
+        onboarding: {
+          dismissed: db.dash.dismissed,
+          steps: {
+            first_resource: db.resources.length + db.trash.length > 0,
+            first_collection: db.collections.length > 0,
+            tried_search: db.dash.triedSearch,
+            asked_question: db.dash.askedQuestion,
+          },
+        },
+      }
+      return HttpResponse.json(body)
     }),
     // ---- AI ----
     http.get(`${API}/ai/status`, async ({ request }) => {
