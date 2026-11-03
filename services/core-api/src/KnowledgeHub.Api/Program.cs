@@ -1,3 +1,5 @@
+using KnowledgeHub.Api.Observability;
+using Microsoft.Extensions.Logging.Console;
 using System.Text.Json;
 using FluentValidation;
 using KnowledgeHub.Api.Http;
@@ -102,6 +104,10 @@ builder.Services.AddAuthorizationBuilder().AddPolicy("admin", p => p.RequireClai
 builder.Services.AddSingleton<IAuthorizationMiddlewareResultHandler, AuthorizationResultHandler>();
 builder.Services.AddKnowledgeHubRateLimiting();
 
+// Structured JSON logs with trace_id and user_id, redacted (NFR-OBS-01, NFR-PRIV-04), and OpenTelemetry (NFR-OBS-02/03).
+builder.Logging.AddConsole(o => o.FormatterName = KhJsonConsoleFormatter.FormatterName).AddConsoleFormatter<KhJsonConsoleFormatter, ConsoleFormatterOptions>();
+builder.AddKnowledgeHubTelemetry();
+
 var app = builder.Build();
 
 app.UseMiddleware<SecurityHeadersMiddleware>();   // first, so error responses carry the headers too
@@ -110,6 +116,7 @@ app.UseMiddleware<UnmatchedApiRouteMiddleware>();
 app.UseMiddleware<NullCharacterMiddleware>();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthentication();
+app.UseMiddleware<UserLogEnrichmentMiddleware>();
 app.UseRateLimiter();
 app.UseAuthorization();
 

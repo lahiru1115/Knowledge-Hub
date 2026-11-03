@@ -36,7 +36,26 @@ public sealed partial class OutboxProcessor(
         }
 
         await Task.WhenAll(claimed.Select(m => ProcessAsync(m, ct)));
+        await RecordBacklogAsync(ct);
         return claimed.Count;
+    }
+
+    /// <summary>The numbers behind <c>kh.outbox.pending</c> and <c>kh.outbox.dead</c> (NFR-OBS-03).</summary>
+    private async Task RecordBacklogAsync(CancellationToken ct)
+    {
+        try
+        {
+            using var scope = scopes.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var counts = await db.Outbox.AsNoTracking()
+                .Where(m => m.Status == OutboxStatus.Pending || m.Status == OutboxStatus.Processing || m.Status == OutboxStatus.Dead)
+                .GroupBy(m => m.Status == OutboxStatus.Dead).Select(g => new { Dead = g.Key, Count = g.Count() }).ToListAsync(ct);
+            KhMetrics.SetOutboxBacklog(counts.FirstOrDefault(c => !c.Dead)?.Count ?? 0, counts.FirstOrDefault(c => c.Dead)?.Count ?? 0);
+        }
+        catch (Exception e) when (e is not OperationCanceledException)
+        {
+            LogBacklogFailed(e);   // a metric must never stop the worker
+        }
     }
 
     private async Task ReclaimStuckAsync(AppDbContext db, CancellationToken ct)
@@ -73,6 +92,7 @@ public sealed partial class OutboxProcessor(
         activity?.SetTag("outbox.attempt", message.Attempts + 1);
 
         var attempt = message.Attempts + 1;
+        var started = KhMetrics.Start();
         try
         {
             using var scope = scopes.CreateScope();
@@ -83,6 +103,7 @@ public sealed partial class OutboxProcessor(
             var context = new OutboxContext(message.Id, message.Type, payload.RootElement.Clone(), attempt, attempt >= _o.MaxAttempts);
             foreach (var handler in handlers) await handler.HandleAsync(context, ct);
             await FinishAsync(message.Id, ct);
+            KhMetrics.OutboxJobDuration.Record(KhMetrics.Seconds(started), Tag("type", message.Type), Tag("outcome", "ok"));
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -92,6 +113,8 @@ public sealed partial class OutboxProcessor(
         catch (Exception ex)
         {
             activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
+            KhMetrics.OutboxJobDuration.Record(KhMetrics.Seconds(started), Tag("type", message.Type),
+                Tag("outcome", attempt >= _o.MaxAttempts ? "dead" : "retry"));
             await FailAsync(message, attempt, ex, ct);
         }
     }
@@ -134,7 +157,12 @@ public sealed partial class OutboxProcessor(
         return baseDelay * (0.8 + (Random.Shared.NextDouble() * 0.4));
     }
 
+    private static KeyValuePair<string, object?> Tag(string key, object value) => new(key, value);
+
     private static string Truncate(string s, int max) => s.Length <= max ? s : s[..max];
+
+    [LoggerMessage(Level = LogLevel.Warning, Message = "Could not read the outbox backlog for the metrics")]
+    private partial void LogBacklogFailed(Exception exception);
 
     [LoggerMessage(Level = LogLevel.Warning, Message = "Put {Count} stuck outbox messages back to pending")]
     private partial void LogReclaimed(int count);

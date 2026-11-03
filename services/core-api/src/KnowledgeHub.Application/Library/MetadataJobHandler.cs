@@ -35,7 +35,12 @@ public sealed partial class MetadataJobHandler(
         if (result.Error is { } error)
         {
             if (result.Transient && !context.IsFinalAttempt)
+            {
+                KhMetrics.MetadataFetches.Add(1, new KeyValuePair<string, object?>("outcome", "retry"));
                 throw new MetadataFetchException(error);
+            }
+
+            KhMetrics.MetadataFetches.Add(1, new KeyValuePair<string, object?>("outcome", "failed"), new KeyValuePair<string, object?>("error", error.ToString()));
             r.MetadataStatus = MetadataStatus.Failed;
             r.MetadataError = error;
             await db.SaveChangesAsync(ct);
@@ -53,6 +58,7 @@ public sealed partial class MetadataJobHandler(
         r.SiteName = Clip(m.SiteName, 200);
         r.MetadataStatus = MetadataStatus.Ready;
         r.MetadataError = null;
+        KhMetrics.MetadataFetches.Add(1, new KeyValuePair<string, object?>("outcome", "ready"));
 
         var hash = HashOf(m.Text);
         if (hash != r.ContentHash)

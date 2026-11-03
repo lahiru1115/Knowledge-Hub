@@ -266,6 +266,24 @@ public sealed class AiClientTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Every_call_is_counted_and_timed_by_operation_and_outcome()
+    {
+        using var meter = new MeterCapture();
+        var ct = TestContext.Current.CancellationToken;
+        _respond = (_, _) => Results.Json(new { items = Array.Empty<object>() });
+        using (var sp = Build())
+            await sp.GetRequiredService<IAiClient>().GetAdminUsageAsync(null, ct);
+        _respond = (_, _) => Results.StatusCode(503);
+        using (var sp = Build(new() { ["Retries"] = "0" }))
+            await Assert.ThrowsAsync<AiUnavailableException>(() => sp.GetRequiredService<IAiClient>().PurgeUserAsync(Guid.NewGuid(), ct));
+
+        var calls = meter.Of("kh.ai.calls").Select(m => ((string?)m.Tags["operation"], (string?)m.Tags["outcome"])).ToList();
+        Assert.Contains(("admin", "ok"), calls);
+        Assert.Contains(("users", "unavailable"), calls);
+        Assert.Equal(2, meter.Of("kh.ai.call.duration").Count);
+    }
+
+    [Fact]
     public async Task Admin_usage_asks_with_the_system_scope_and_reads_the_rows()
     {
         var user = Guid.NewGuid();

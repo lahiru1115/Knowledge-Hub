@@ -14,6 +14,7 @@ from fastapi import Depends, Request
 
 from app.config import Settings, get_settings
 from app.errors import ApiError
+from app.observability import user_id_var
 
 SYSTEM = "system"
 MAX_LIFETIME_SECONDS = 120
@@ -53,12 +54,16 @@ def _decode(token: str, settings: Settings) -> Caller:
             raise ApiError(401, "unauthenticated")
         return Caller(None, scopes, str(claims["jti"]))
     try:
-        return Caller(uuid.UUID(sub), frozenset(), str(claims["jti"]))
+        user = uuid.UUID(sub)
+        user_id_var.set(str(user))  # the logs of this request name the user (an opaque ID)
+        return Caller(user, frozenset(), str(claims["jti"]))
     except ValueError as exc:
         raise ApiError(401, "unauthenticated") from exc
 
 
-def caller(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> Caller:
+async def caller(request: Request, settings: Annotated[Settings, Depends(get_settings)]) -> Caller:
+    # async on purpose: a sync dependency runs in a thread with a copy of the context, and the user ID set while
+    # decoding the token (for the logs) would then never reach the handler.
     header = request.headers.get("authorization", "")
     scheme, _, token = header.partition(" ")
     if scheme.lower() != "bearer" or not token:

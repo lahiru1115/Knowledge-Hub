@@ -168,6 +168,27 @@ public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStat
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
         timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var operation = path.Split('/', '?')[0];   // "summarize", "search", "chat" …: no IDs, so the label stays small
+        var started = KhMetrics.Start();
+        var outcome = "ok";
+        try
+        {
+            return await SendCoreAsync(method, path, token, content, timeout, ct);
+        }
+        catch (Exception e)
+        {
+            outcome = e switch { AiUnavailableException => "unavailable", AiRejectedException => "rejected", _ => "error" };
+            throw;
+        }
+        finally
+        {
+            KhMetrics.AiCalls.Add(1, new KeyValuePair<string, object?>("operation", operation), new KeyValuePair<string, object?>("outcome", outcome));
+            KhMetrics.AiCallDuration.Record(KhMetrics.Seconds(started), new KeyValuePair<string, object?>("operation", operation));
+        }
+    }
+
+    private async Task<string> SendCoreAsync(HttpMethod method, string path, string? token, HttpContent? content, CancellationTokenSource timeout, CancellationToken ct)
+    {
         try
         {
             using var request = new HttpRequestMessage(method, path) { Content = content };
