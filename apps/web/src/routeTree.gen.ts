@@ -26,6 +26,7 @@ import { Route as AppCollectionsIdRouteImport } from './routes/_app/collections.
 import { Route as AppSettingsIndexRouteImport } from './routes/_app/settings/index'
 import { Route as AppSettingsAiRouteImport } from './routes/_app/settings/ai'
 import { Route as AppSettingsAppearanceRouteImport } from './routes/_app/settings/appearance'
+import { Route as AppSettingsDataRouteImport } from './routes/_app/settings/data'
 import { Route as AppSettingsProfileRouteImport } from './routes/_app/settings/profile'
 import { Route as AppSettingsAccountIndexRouteImport } from './routes/_app/settings/account.index'
 import { Route as AppSettingsAccountDeleteRouteImport } from './routes/_app/settings/account.delete'
@@ -114,6 +115,11 @@ const AppSettingsAppearanceRoute = AppSettingsAppearanceRouteImport.update({
   path: '/appearance',
   getParentRoute: () => AppSettingsRoute,
 } as any)
+const AppSettingsDataRoute = AppSettingsDataRouteImport.update({
+  id: '/data',
+  path: '/data',
+  getParentRoute: () => AppSettingsRoute,
+} as any)
 const AppSettingsProfileRoute = AppSettingsProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
@@ -145,6 +151,7 @@ export interface FileRoutesByFullPath {
   '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/settings/data': typeof AppSettingsDataRoute
   '/settings/profile': typeof AppSettingsProfileRoute
   '/ask/': typeof AppAskIndexRoute
   '/collections/': typeof AppCollectionsIndexRoute
@@ -164,6 +171,7 @@ export interface FileRoutesByTo {
   '/collections/$id': typeof AppCollectionsIdRoute
   '/settings/ai': typeof AppSettingsAiRoute
   '/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/settings/data': typeof AppSettingsDataRoute
   '/settings/profile': typeof AppSettingsProfileRoute
   '/ask': typeof AppAskIndexRoute
   '/collections': typeof AppCollectionsIndexRoute
@@ -187,6 +195,7 @@ export interface FileRoutesById {
   '/_app/collections/$id': typeof AppCollectionsIdRoute
   '/_app/settings/ai': typeof AppSettingsAiRoute
   '/_app/settings/appearance': typeof AppSettingsAppearanceRoute
+  '/_app/settings/data': typeof AppSettingsDataRoute
   '/_app/settings/profile': typeof AppSettingsProfileRoute
   '/_app/ask/': typeof AppAskIndexRoute
   '/_app/collections/': typeof AppCollectionsIndexRoute
@@ -210,6 +219,7 @@ export interface FileRouteTypes {
     | '/collections/$id'
     | '/settings/ai'
     | '/settings/appearance'
+    | '/settings/data'
     | '/settings/profile'
     | '/ask/'
     | '/collections/'
@@ -229,6 +239,7 @@ export interface FileRouteTypes {
     | '/collections/$id'
     | '/settings/ai'
     | '/settings/appearance'
+    | '/settings/data'
     | '/settings/profile'
     | '/ask'
     | '/collections'
@@ -251,6 +262,7 @@ export interface FileRouteTypes {
     | '/_app/collections/$id'
     | '/_app/settings/ai'
     | '/_app/settings/appearance'
+    | '/_app/settings/data'
     | '/_app/settings/profile'
     | '/_app/ask/'
     | '/_app/collections/'
@@ -388,6 +400,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppSettingsAppearanceRouteImport
       parentRoute: typeof AppSettingsRoute
     }
+    '/_app/settings/data': {
+      id: '/_app/settings/data'
+      path: '/data'
+      fullPath: '/settings/data'
+      preLoaderRoute: typeof AppSettingsDataRouteImport
+      parentRoute: typeof AppSettingsRoute
+    }
     '/_app/settings/profile': {
       id: '/_app/settings/profile'
       path: '/profile'
@@ -428,6 +447,7 @@ const AppAskRouteWithChildren =
 interface AppSettingsRouteChildren {
   AppSettingsAiRoute: typeof AppSettingsAiRoute
   AppSettingsAppearanceRoute: typeof AppSettingsAppearanceRoute
+  AppSettingsDataRoute: typeof AppSettingsDataRoute
   AppSettingsProfileRoute: typeof AppSettingsProfileRoute
   AppSettingsIndexRoute: typeof AppSettingsIndexRoute
   AppSettingsAccountDeleteRoute: typeof AppSettingsAccountDeleteRoute
@@ -437,6 +457,7 @@ interface AppSettingsRouteChildren {
 const AppSettingsRouteChildren: AppSettingsRouteChildren = {
   AppSettingsAiRoute: AppSettingsAiRoute,
   AppSettingsAppearanceRoute: AppSettingsAppearanceRoute,
+  AppSettingsDataRoute: AppSettingsDataRoute,
   AppSettingsProfileRoute: AppSettingsProfileRoute,
   AppSettingsIndexRoute: AppSettingsIndexRoute,
   AppSettingsAccountDeleteRoute: AppSettingsAccountDeleteRoute,

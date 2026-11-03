@@ -4,6 +4,7 @@ const sections = [
   { to: '/settings/profile', label: 'Profile' },
   { to: '/settings/appearance', label: 'Appearance' },
   { to: '/settings/ai', label: 'AI' },
+  { to: '/settings/data', label: 'Data' },
   { to: '/settings/account', label: 'Account' },
 ] as const
 

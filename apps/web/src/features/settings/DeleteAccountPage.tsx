@@ -9,6 +9,7 @@ import { FormAlert } from '@/components/FormAlert'
 import { LoadingButton } from '@/components/loading-button'
 import { PasswordField } from '@/components/form-field'
 import { applyProblem } from '@/features/auth/formErrors'
+import { ExportLinks } from './DataSection'
 
 const schema = z.object({ password: z.string().min(1, 'Enter your password to confirm.') })
 type Values = z.infer<typeof schema>
@@ -52,6 +53,10 @@ export function DeleteAccountPage() {
         <li>Your search and chat history</li>
       </ul>
       <p className="text-sm text-muted-foreground">You can&apos;t undo this.</p>
+      <div className="space-y-2">
+        <p className="text-sm">Want a copy first?</p>
+        <ExportLinks />
+      </div>
       <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
         {formError && <FormAlert>{formError}</FormAlert>}
         <PasswordField

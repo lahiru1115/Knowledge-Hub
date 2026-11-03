@@ -42,7 +42,7 @@ describe('settings navigation', () => {
       within(nav)
         .getAllByRole('link')
         .map((l) => l.textContent),
-    ).toEqual(['Profile', 'Appearance', 'AI', 'Account'])
+    ).toEqual(['Profile', 'Appearance', 'AI', 'Data', 'Account'])
     expect(within(nav).getByRole('link', { name: 'Profile' })).toHaveAttribute(
       'aria-current',
       'page',
