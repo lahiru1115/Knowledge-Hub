@@ -36,4 +36,6 @@ public sealed class RateLimitOptions
     public int GeneralPerUserPerMinute { get; set; } = 300;
     /// <summary>Link previews make the server fetch other sites, so they have their own, lower limit.</summary>
     public int PreviewPerUserPerMinute { get; set; } = 20;
+    /// <summary>An export reads the whole library, so it is limited more tightly than ordinary requests.</summary>
+    public int ExportPerUserPerMinute { get; set; } = 6;
 }

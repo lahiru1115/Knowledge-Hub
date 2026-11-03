@@ -48,6 +48,7 @@ builder.Services.AddScoped<ResourceService>();
 builder.Services.AddScoped<TagService>();
 builder.Services.AddScoped<MetadataPreviewService>();
 builder.Services.AddScoped<KnowledgeHub.Application.Insights.DashboardService>();
+builder.Services.AddScoped<KnowledgeHub.Application.Insights.ExportService>();
 builder.Services.AddScoped<KnowledgeHub.Application.Insights.Milestones>();
 builder.Services.AddScoped<KnowledgeHub.Application.Ai.AiFeaturesService>();
 builder.Services.AddScoped<KnowledgeHub.Application.Ai.ChatService>();
