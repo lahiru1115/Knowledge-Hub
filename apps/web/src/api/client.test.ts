@@ -2,7 +2,7 @@ import { HttpResponse, http } from 'msw'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { server } from '@/test/server'
 import { API, problem, setCsrfCookie } from '@/test/helpers'
-import { ApiProblem, api, setSessionExpiredHandler, unwrap } from './client'
+import { ApiProblem, REFRESH_LOCK, api, setSessionExpiredHandler, unwrap } from './client'
 
 afterEach(() => {
   setSessionExpiredHandler(undefined)
@@ -124,6 +124,44 @@ describe('silent refresh', () => {
     expect(me).toEqual({ id: 'me' })
     expect(tags).toEqual({ items: [] })
     expect(refreshes).toBe(1)
+  })
+
+  it('refreshes under a lock that other tabs share, so two tabs never send the same refresh token', async () => {
+    setCsrfCookie('c')
+    const held: string[] = []
+    let insideLock = false
+    const locks = {
+      request: vi.fn(async (name: string, cb: () => Promise<boolean>) => {
+        held.push(name)
+        insideLock = true
+        try {
+          return await cb()
+        } finally {
+          insideLock = false
+        }
+      }),
+    }
+    // Add a lock manager to the real navigator for this test only (jsdom has none).
+    Object.defineProperty(globalThis.navigator, 'locks', { value: locks, configurable: true })
+    let refreshedInsideLock: boolean | undefined
+    let ok = false
+    server.use(
+      http.get(`${API}/me`, () =>
+        ok ? HttpResponse.json({ id: 'me' }) : problem(401, 'unauthenticated'),
+      ),
+      http.post(`${API}/auth/refresh`, () => {
+        refreshedInsideLock = insideLock
+        ok = true
+        return new HttpResponse(null, { status: 204 })
+      }),
+    )
+    try {
+      expect(await unwrap(api.GET('/me'))).toEqual({ id: 'me' })
+    } finally {
+      Reflect.deleteProperty(globalThis.navigator, 'locks')
+    }
+    expect(held).toEqual([REFRESH_LOCK])
+    expect(refreshedInsideLock).toBe(true)
   })
 
   it('reports an ended session once when the refresh fails, and surfaces the 401', async () => {

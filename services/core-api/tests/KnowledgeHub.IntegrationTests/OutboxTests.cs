@@ -80,6 +80,67 @@ public class OutboxTests(ApiFactory factory)
 
     // ---------- the processor ----------
 
+    private sealed class FailingHandler : IOutboxHandler
+    {
+        public IReadOnlyCollection<string> Types { get; } = [ScriptedHandler.Type];
+        public int Runs;
+        public Task HandleAsync(OutboxContext context, CancellationToken ct)
+        {
+            Interlocked.Increment(ref Runs);
+            throw new InvalidOperationException("the AI service is down");
+        }
+    }
+
+    [Fact]
+    public async Task One_failing_handler_does_not_stop_the_others_for_the_same_message()
+    {
+        // Saving a link runs indexing (AI) and the metadata fetch from one message: AI being down must not stop the fetch.
+        var failing = new FailingHandler();
+        using var h = await ArrangeAsync(b => b.ConfigureServices(s => s.Insert(0, ServiceDescriptor.Singleton<IOutboxHandler>(failing))));
+        var id = await InsertAsync();
+
+        await h.Processor.RunOnceAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(1, failing.Runs);
+        Assert.Single(h.Handler.Calls, c => c.MessageId == id);   // ran although the handler before it failed
+        var m = await GetAsync(id);
+        Assert.Equal((OutboxStatus.Pending, 1), (m.Status, m.Attempts));   // still retried for the one that failed
+        Assert.Contains("the AI service is down", m.LastError, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task Jobs_for_the_same_resource_run_one_after_another_in_order_and_others_alongside()
+    {
+        using var h = await ArrangeAsync();
+        var running = new System.Collections.Concurrent.ConcurrentDictionary<string, int>();
+        var overlaps = 0;
+        var order = new System.Collections.Concurrent.ConcurrentQueue<Guid>();
+        var otherStartedWhileBusy = false;
+        string? busyKey = null;
+        h.Handler.Behaviour = async c =>
+        {
+            var key = c.Payload.GetProperty("resource_id").GetString()!;
+            if (running.AddOrUpdate(key, 1, (_, n) => n + 1) > 1) Interlocked.Increment(ref overlaps);
+            if (busyKey is not null && busyKey != key && running.GetValueOrDefault(busyKey) > 0) otherStartedWhileBusy = true;
+            busyKey ??= key;
+            order.Enqueue(c.MessageId);
+            await Task.Delay(150);
+            running.AddOrUpdate(key, 0, (_, n) => n - 1);
+        };
+        var r = Guid.NewGuid();
+        var first = await InsertAsync(payload: $$$"""{"resource_id":"{{{r}}}"}""");
+        var second = await InsertAsync(payload: $$$"""{"resource_id":"{{{r}}}"}""");
+        var other = await InsertAsync(payload: $$$"""{"resource_id":"{{{Guid.NewGuid()}}}"}""");
+
+        await h.Processor.RunOnceAsync(TestContext.Current.CancellationToken);
+
+        Assert.Equal(0, overlaps);
+        var mine = order.Where(id => id == first || id == second).ToList();
+        Assert.Equal([first, second], mine);   // in the order they were written
+        Assert.Contains(other, order);
+        Assert.True(otherStartedWhileBusy, "a different resource should run alongside, not wait");
+    }
+
     [Fact]
     public async Task A_successful_job_is_marked_done_with_the_time_and_no_error()
     {

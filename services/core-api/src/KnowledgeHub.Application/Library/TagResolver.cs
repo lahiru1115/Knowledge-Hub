@@ -26,19 +26,20 @@ internal sealed class TagResolver(IAppDbContext db)
         return result;
     }
 
-    /// <summary>Existing tags by name, plus new tags added to the context for the missing names.</summary>
+    /// <summary>
+    /// The tags with these names, creating the missing ones. Creating is an insert that ignores a name another request
+    /// has just created (ON CONFLICT DO NOTHING), followed by a read, so two saves that introduce the same new tag at
+    /// the same moment both succeed and share it instead of one failing on the unique (user_id, name) index.
+    /// </summary>
     public async Task<Dictionary<string, Tag>> EnsureAsync(Guid userId, IReadOnlyCollection<string> names, CancellationToken ct)
     {
         var existing = await db.Tags.OwnedBy(userId).Where(t => names.Contains(t.Name)).ToListAsync(ct);
-        var map = existing.ToDictionary(t => t.Name);
-        foreach (var name in names.Where(n => !map.ContainsKey(n)))
-        {
-            var tag = new Tag { UserId = userId, Name = name };
-            db.Tags.Add(tag);
-            map[name] = tag;
-        }
+        var missing = names.Where(n => existing.All(t => t.Name != n)).Distinct(StringComparer.Ordinal).ToArray();
+        if (missing.Length == 0) return existing.ToDictionary(t => t.Name);
 
-        return map;
+        await db.InsertTagsIfMissingAsync(userId, missing, ct);
+        var created = await db.Tags.OwnedBy(userId).Where(t => missing.Contains(t.Name)).ToListAsync(ct);
+        return existing.Concat(created).ToDictionary(t => t.Name);
     }
 
     public static string TagsText(IEnumerable<string> names) => string.Join(' ', names.Order(StringComparer.Ordinal));

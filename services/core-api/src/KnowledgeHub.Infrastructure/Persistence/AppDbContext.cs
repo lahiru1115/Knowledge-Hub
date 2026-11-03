@@ -18,6 +18,19 @@ public sealed class AppDbContext(DbContextOptions<AppDbContext> options) : DbCon
     public DbSet<Collection> Collections => Set<Collection>();
     public DbSet<Resource> Resources => Set<Resource>();
     public DbSet<Tag> Tags => Set<Tag>();
+
+    public async Task InsertTagsIfMissingAsync(Guid userId, IReadOnlyCollection<string> names, CancellationToken ct)
+    {
+        if (names.Count == 0) return;
+        var list = names.ToArray();
+        var ids = list.Select(_ => Guid.CreateVersion7()).ToArray();
+        // ON CONFLICT: another request may have created the same tag after we looked; that one is used instead.
+        await Database.ExecuteSqlAsync($"""
+            INSERT INTO core.tags (id, user_id, name)
+            SELECT x.id, {userId}, x.name FROM unnest({ids}::uuid[], {list}::text[]) AS x(id, name)
+            ON CONFLICT (user_id, name) DO NOTHING
+            """, ct);
+    }
     public DbSet<ResourceTag> ResourceTags => Set<ResourceTag>();
     public DbSet<OutboxMessage> Outbox => Set<OutboxMessage>();
 

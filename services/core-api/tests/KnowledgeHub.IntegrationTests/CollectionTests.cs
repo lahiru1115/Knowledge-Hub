@@ -231,4 +231,24 @@ public class CollectionTests(ApiFactory factory)
         Assert.False(await db.Collections.AnyAsync(x => x.UserId == userId, TestContext.Current.CancellationToken));
         Assert.False(await db.Resources.IgnoreQueryFilters().AnyAsync(x => x.UserId == userId, TestContext.Current.CancellationToken));
     }
+
+    [Fact]
+    public async Task An_account_with_resources_filed_in_collections_can_be_deleted()
+    {
+        // Resources point at collections with ON DELETE RESTRICT, so the cascade from the user must not trip over them.
+        var c = await factory.UserAsync();
+        var col = await c.CreateCollectionAsync("Filed");
+        await c.CreateResourceAsync("https://example.com/filed", new { collection_id = col.Id(), tags = new[] { "kept" } });
+        var trashed = await c.CreateResourceAsync("https://example.com/trashed", new { collection_id = col.Id() });
+        await c.SendAsync(HttpMethod.Delete, "/api/v1/resources/" + trashed.Id()).ExpectAsync(HttpStatusCode.NoContent);
+        var userId = Guid.Parse((await c.GetAsync("/api/v1/me").ExpectAsync(HttpStatusCode.OK)).Id());
+
+        Assert.Equal(HttpStatusCode.NoContent, (await c.SendAsync(HttpMethod.Delete, "/api/v1/me", new { password = "a long unusual passphrase" })).StatusCode);
+
+        await using var db = factory.Db.Admin();
+        Assert.False(await db.Users.AnyAsync(u => u.Id == userId, TestContext.Current.CancellationToken));
+        Assert.False(await db.Resources.IgnoreQueryFilters().AnyAsync(x => x.UserId == userId, TestContext.Current.CancellationToken));
+        Assert.False(await db.Collections.AnyAsync(x => x.UserId == userId, TestContext.Current.CancellationToken));
+        Assert.False(await db.Tags.AnyAsync(x => x.UserId == userId, TestContext.Current.CancellationToken));
+    }
 }

@@ -82,19 +82,31 @@ async function ensureCsrf(): Promise<string> {
 
 // One refresh at a time: requests that fail while it runs wait for it (Doc 03 §12.4). The promise is
 // dropped as soon as it settles, so a later 401 starts a fresh refresh with the rotated cookie.
+// Across tabs too: tabs share the refresh cookie, and two tabs sending the same one would look like a stolen token
+// to the server, which then ends every session (FR-AUTH-04). A Web Lock makes the second tab wait; by then the cookie
+// holds the token the first tab received, so its refresh succeeds.
 let refreshing: Promise<boolean> | undefined
+
+export const REFRESH_LOCK = 'kh-refresh'
+
+async function postRefresh(): Promise<boolean> {
+  try {
+    const csrf = await ensureCsrf()
+    const res = await globalThis.fetch(apiUrl('/auth/refresh'), {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': csrf },
+    })
+    return res.ok
+  } catch {
+    return false
+  }
+}
 
 function refreshOnce(): Promise<boolean> {
   refreshing ??= (async () => {
     try {
-      const csrf = await ensureCsrf()
-      const res = await globalThis.fetch(apiUrl('/auth/refresh'), {
-        method: 'POST',
-        headers: { 'X-CSRF-Token': csrf },
-      })
-      return res.ok
-    } catch {
-      return false
+      const locks = (globalThis.navigator as Navigator | undefined)?.locks
+      return locks ? await locks.request(REFRESH_LOCK, postRefresh) : await postRefresh()
     } finally {
       refreshing = undefined
     }

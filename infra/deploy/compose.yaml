@@ -18,6 +18,7 @@ services:
       - caddy-config:/config
     depends_on:
       core-api: { condition: service_healthy }
+    networks: [default, internal]   # the public side, and the network the API is on
 
   postgres:
     <<: *restart

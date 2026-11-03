@@ -161,6 +161,7 @@ public class ObservabilityTests(ApiFactory factory)
             b.UseSetting("Outbox:Enabled", "false");
             b.UseSetting("Outbox:BaseBackoffSeconds", "0.05");
             b.UseSetting("Outbox:MaxAttempts", "2");
+            b.UseSetting("Outbox:BacklogMetricSeconds", "0");
             b.ConfigureServices(s => s.AddSingleton<IOutboxHandler>(handler));
         });
         _ = web.Server;   // build the host

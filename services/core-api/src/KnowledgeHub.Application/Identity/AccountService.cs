@@ -158,7 +158,10 @@ public sealed class AccountService(
 
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         await db.AuditEvents.Where(e => e.UserId == userId).ExecuteDeleteAsync(ct);
-        await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct); // refresh and reset tokens cascade
+        // Resources first: they point at collections with ON DELETE RESTRICT, and whether the cascade from users reaches
+        // them before the collections depends on the order the constraints were created. Deleted ones included.
+        await db.Resources.IgnoreQueryFilters().Where(r => r.UserId == userId).ExecuteDeleteAsync(ct);
+        await db.Users.Where(u => u.Id == userId).ExecuteDeleteAsync(ct); // the rest (collections, tags, tokens) cascades
         db.ChangeTracker.Clear();
         audit.Write("account.deleted", userId);
         // The AI service removes everything it holds for this user (FR-AUTH-09); written in the same transaction.

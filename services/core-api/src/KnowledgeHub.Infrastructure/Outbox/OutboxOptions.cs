@@ -9,6 +9,8 @@ public sealed class OutboxOptions
     public bool Enabled { get; set; } = true;
     /// <summary>How often the worker looks for due messages when nothing wakes it earlier.</summary>
     public double PollSeconds { get; set; } = 2;
+    /// <summary>How often the kh.outbox.pending and kh.outbox.dead gauges are re-read from the table.</summary>
+    public double BacklogMetricSeconds { get; set; } = 15;
     /// <summary>Messages claimed and run at once.</summary>
     public int BatchSize { get; set; } = 10;
     /// <summary>After this many failed attempts a message is dead (NFR-REL-02).</summary>

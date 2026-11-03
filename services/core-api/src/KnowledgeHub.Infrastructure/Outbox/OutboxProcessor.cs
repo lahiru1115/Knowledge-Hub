@@ -24,6 +24,8 @@ public sealed partial class OutboxProcessor(
     public static readonly ActivitySource Source = new("KnowledgeHub.Outbox");
     private readonly OutboxOptions _o = options.Value;
 
+    private DateTimeOffset _backlogReadAt = DateTimeOffset.MinValue;
+
     /// <summary>Returns how many messages were claimed (so the caller can go again at once when the batch was full).</summary>
     public async Task<int> RunOnceAsync(CancellationToken ct)
     {
@@ -35,14 +37,43 @@ public sealed partial class OutboxProcessor(
             claimed = await ClaimAsync(db, ct);
         }
 
-        await Task.WhenAll(claimed.Select(m => ProcessAsync(m, ct)));
+        // Different resources run side by side; messages for the same resource run one after another, oldest first, so
+        // two index jobs for it never overlap and the newest content is the one written last.
+        await Task.WhenAll(claimed
+            .GroupBy(OrderingKey)
+            .Select(async group =>
+            {
+                foreach (var m in group.OrderBy(m => m.CreatedAt).ThenBy(m => m.Id)) await ProcessAsync(m, ct);
+            }));
         await RecordBacklogAsync(ct);
         return claimed.Count;
+    }
+
+    /// <summary>The resource a message is about, or the message itself when it is not about one.</summary>
+    private static string OrderingKey(OutboxMessage m)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(m.Payload);
+            if (doc.RootElement.ValueKind == JsonValueKind.Object && doc.RootElement.TryGetProperty("resource_id", out var r)
+                && r.ValueKind == JsonValueKind.String)
+                return "r:" + r.GetString();
+        }
+        catch (JsonException)
+        {
+            // An unreadable payload fails in ProcessAsync, where it is recorded; here it simply runs on its own.
+        }
+
+        return "m:" + m.Id;
     }
 
     /// <summary>The numbers behind <c>kh.outbox.pending</c> and <c>kh.outbox.dead</c> (NFR-OBS-03).</summary>
     private async Task RecordBacklogAsync(CancellationToken ct)
     {
+        // A count over the outbox after every pass (every 2 seconds when idle) is more than a gauge needs.
+        var now = clock.UtcNow;
+        if (now - _backlogReadAt < TimeSpan.FromSeconds(_o.BacklogMetricSeconds)) return;
+        _backlogReadAt = now;
         try
         {
             using var scope = scopes.CreateScope();
@@ -101,7 +132,24 @@ public sealed partial class OutboxProcessor(
 
             using var payload = JsonDocument.Parse(message.Payload);
             var context = new OutboxContext(message.Id, message.Type, payload.RootElement.Clone(), attempt, attempt >= _o.MaxAttempts);
-            foreach (var handler in handlers) await handler.HandleAsync(context, ct);
+            // Every handler gets its turn even if one before it fails: a message such as resource.created feeds both the
+            // AI index and the metadata fetch, and the AI service being down must not stop the fetch. Handlers are
+            // idempotent, so on a retry the ones that succeeded simply run again.
+            List<Exception>? failures = null;
+            foreach (var handler in handlers)
+            {
+                try
+                {
+                    await handler.HandleAsync(context, ct);
+                }
+                catch (Exception e) when (e is not OperationCanceledException || !ct.IsCancellationRequested)
+                {
+                    (failures ??= []).Add(e);
+                }
+            }
+
+            if (failures is [var only]) System.Runtime.ExceptionServices.ExceptionDispatchInfo.Throw(only);
+            if (failures is { Count: > 1 }) throw new AggregateException(failures);
             await FinishAsync(message.Id, ct);
             KhMetrics.OutboxJobDuration.Record(KhMetrics.Seconds(started), Tag("type", message.Type), Tag("outcome", "ok"));
         }

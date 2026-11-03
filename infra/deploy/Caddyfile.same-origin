@@ -26,8 +26,13 @@
 		root * /srv/web
 		try_files {path} /index.html
 		file_server
-		header /assets/* Cache-Control "public, max-age=31536000, immutable"
-		header /index.html Cache-Control "no-cache"
+		# Hashed assets never change; everything else (index.html, served for every app path by try_files) must be
+		# checked on each visit, or a cached page asks for assets a deploy removed. Matchers see the path as requested,
+		# because `header` runs before `try_files`, so match "not an asset" rather than /index.html.
+		@asset path /assets/*
+		header @asset Cache-Control "public, max-age=31536000, immutable"
+		@page not path /assets/*
+		header @page Cache-Control "no-cache"
 		header {
 			Content-Security-Policy "default-src 'self'; script-src 'self' 'sha256-NE9v+SiuJ5Htz3vUlNLQH29tgjYTbRDj0miTIkEhryc='; style-src 'self' 'unsafe-inline'; img-src 'self' https: data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
 			Strict-Transport-Security "max-age=31536000; includeSubDomains"

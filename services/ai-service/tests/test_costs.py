@@ -290,3 +290,81 @@ async def test_the_background_loop_keeps_going_after_a_failure_and_stops_when_ca
     await asyncio.gather(task, return_exceptions=True)
     assert {r.embedding_model for r in chunks(db, user, res)} == {"concept-model"}
     assert task.cancelled()
+
+
+# ---------- the daily cap under concurrency ----------
+
+
+def _seed_user_spend(db, user, amount):
+    with db.begin() as c:
+        c.execute(
+            text(
+                "INSERT INTO ai.usage (id, user_id, operation, provider, model, cost_usd, created_at) "
+                "VALUES (:i, :u, 'chat', 'claude', 'seeded-spend', :c, now())"
+            ),
+            {"i": uuid.uuid4(), "u": user, "c": amount},
+        )
+
+
+async def test_paid_calls_started_together_cannot_all_slip_under_the_daily_cap(client, app, db):
+    """Just under the cap, a chat and a summary started at the same moment: only one may go ahead."""
+    from app.errors import ApiError
+    from app.quota import UsageMeter
+
+    user = uuid.uuid4()
+    _seed_user_spend(db, user, 0.0099)
+    meter = UsageMeter(app.state.engine, {}, "claude", PRICES, daily_cost_cap=0.01)
+
+    results = await asyncio.gather(
+        meter.reserve(user, "chat", "paid-llm"),
+        meter.reserve(user, "summarize", "paid-small"),
+        meter.reserve(user, "suggest_tags", "paid-small"),
+        return_exceptions=True,
+    )
+
+    refused = [r for r in results if isinstance(r, ApiError)]
+    assert len(refused) == 2, results
+    assert refused[0].code == "ai_quota_exceeded"
+
+
+async def test_a_reservation_holds_an_estimate_until_the_real_cost_replaces_it(client, app, db):
+    from app.quota import UsageMeter
+
+    user = uuid.uuid4()
+    meter = UsageMeter(app.state.engine, {}, "claude", PRICES, daily_cost_cap=10.0)
+    r = await meter.reserve(user, "chat", "paid-llm")
+    held = spend(db, user, "chat")[0].cost_usd
+    assert held > 0  # counted against the cap while the call runs
+    await meter.finish(r, 100, 10)
+    assert float(spend(db, user, "chat")[0].cost_usd) == pytest.approx(PRICES.cost("paid-llm", 100, 10))
+    r2 = await meter.reserve(user, "summarize", "paid-small")
+    await meter.cancel(r2)
+    assert spend(db, user, "summarize") == []
+
+
+async def test_free_models_reserve_no_estimate(client, app, db):
+    from app.quota import UsageMeter
+
+    user = uuid.uuid4()
+    meter = UsageMeter(app.state.engine, {}, "free", PRICES, daily_cost_cap=None)
+    await meter.reserve(user, "chat", "llama3.2:3b")
+    assert float(spend(db, user, "chat")[0].cost_usd) == 0
+
+
+async def test_one_resource_that_cannot_be_embedded_does_not_hold_up_the_others(client, app, db):
+    class Picky(ConceptEmbedder):
+        async def embed_documents(self, texts):
+            if any("poison" in t for t in texts):
+                raise ValueError("this text upsets the model")
+            return await super().embed_documents(texts)
+
+    user = uuid.uuid4()
+    bad, good = uuid.UUID(int=1), uuid.uuid4()  # the bad one sorts first, as it would every run
+    seed_old(db, user, bad, ["T\n\npoison"])
+    seed_old(db, user, good, ["T\n\ntext one"])
+    service = ReindexService(app.state.engine, Picky(), "free")
+
+    await service.run_once(batch=1000)
+
+    assert {r.embedding_model for r in chunks(db, user, good)} == {"concept-model"}
+    assert {r.embedding_model for r in chunks(db, user, bad)} == {"old-model"}  # left as it was, searchable as before

@@ -1,5 +1,3 @@
-using System.Web;
-
 namespace KnowledgeHub.Domain;
 
 /// <summary>
@@ -18,17 +16,24 @@ public static class UrlNormalizer
         normalized = "";
         if (!TryParse(url, out var uri)) return false;
 
-        var query = HttpUtility.ParseQueryString(uri.Query);
-        var kept = query.AllKeys
-            .Where(k => k is not null && !k.StartsWith("utm_", StringComparison.OrdinalIgnoreCase))
-            .SelectMany(k => (query.GetValues(k) ?? []).Select(v => $"{Uri.EscapeDataString(k!)}={Uri.EscapeDataString(v)}"))
-            .ToList();
+        // Split by hand rather than with a name/value collection: that drops parts with no name ("?abc") and groups
+        // repeated names, so different links could look like duplicates. Order is kept; only utm_* parts go.
+        var kept = new List<string>();
+        foreach (var part in uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = part.IndexOf('=', StringComparison.Ordinal);
+            var name = Decode(eq < 0 ? part : part[..eq]);
+            if (name.StartsWith("utm_", StringComparison.OrdinalIgnoreCase)) continue;
+            kept.Add(eq < 0 ? Uri.EscapeDataString(name) : $"{Uri.EscapeDataString(name)}={Uri.EscapeDataString(Decode(part[(eq + 1)..]))}");
+        }
 
         var path = uri.AbsolutePath.TrimEnd('/');
         var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
         normalized = $"{uri.Scheme}://{uri.IdnHost.ToLowerInvariant()}{port}{path}{(kept.Count > 0 ? "?" + string.Join('&', kept) : "")}";
         return true;
     }
+
+    private static string Decode(string s) => Uri.UnescapeDataString(s.Replace('+', ' '));
 
     private static bool TryParse(string? url, out Uri uri)
     {

@@ -19,9 +19,20 @@ public sealed class AuthService(
 {
     private readonly AuthOptions _options = options.Value;
 
-    // Verified against when the email is unknown, so unknown and known emails take similar time.
-    private string DecoyHash => _decoyHash ??= hasher.Hash("decoy-password-for-timing");
-    private string? _decoyHash;
+    // Verified against when the email is unknown, so unknown and known emails take similar time. Made once per process:
+    // this service is scoped, and making it per request would add a second Argon2 run to exactly the unknown-email case.
+    private string DecoyHash
+    {
+        get
+        {
+            var h = Volatile.Read(ref s_decoyHash);
+            if (h is not null) return h;
+            Interlocked.CompareExchange(ref s_decoyHash, hasher.Hash("decoy-password-for-timing"), null);
+            return s_decoyHash!;
+        }
+    }
+
+    private static string? s_decoyHash;
 
     public async Task<AuthResult> RegisterAsync(RegisterRequest input, CancellationToken ct)
     {
@@ -49,7 +60,7 @@ public sealed class AuthService(
         {
             await db.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (IsUniqueViolation(ex))
+        catch (DbUpdateException ex) when (DbErrors.IsUniqueViolation(ex))
         {
             throw new AppException(ProblemCode.EmailTaken); // lost a race with a concurrent registration
         }
@@ -159,7 +170,4 @@ public sealed class AuthService(
             ?? throw new AppException(ProblemCode.Unauthenticated);
         return UserDto.From(user);
     }
-
-    private static bool IsUniqueViolation(DbUpdateException ex) =>
-        ex.InnerException?.GetType().GetProperty("SqlState")?.GetValue(ex.InnerException) as string == "23505";
 }

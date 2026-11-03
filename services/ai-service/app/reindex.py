@@ -23,6 +23,10 @@ log = logging.getLogger(__name__)
 BATCH = 32
 
 
+#: After this many resources fail one after another, the model is taken to be down and the run stops.
+MAX_FAILURES_IN_A_ROW = 3
+
+
 class ReindexService:
     def __init__(
         self, engine: AsyncEngine, embedder: Embedder, provider: str, costs: CostCalculator | None = None
@@ -57,20 +61,26 @@ class ReindexService:
                     text(
                         "SELECT DISTINCT user_id, resource_id FROM ai.chunks c WHERE embedding_model <> :m "
                         "AND NOT EXISTS (SELECT 1 FROM ai.chunks n WHERE n.user_id = c.user_id "
-                        "AND n.resource_id = c.resource_id AND n.embedding_model = :m) LIMIT :n"
+                        "AND n.resource_id = c.resource_id AND n.embedding_model = :m) "
+                        "ORDER BY user_id, resource_id LIMIT :n"
                     ),
                     {"m": self._embedder.model_id, "n": batch},
                 )
             ).all()
         done = 0
+        failures_in_a_row = 0
         for user_id, resource_id in todo:
             try:
                 await self._one(user_id, resource_id)
                 done += 1
+                failures_in_a_row = 0
             except Exception:
-                # The new model is not answering (or this resource is odd). Stop; the next run starts again from here.
-                log.warning("Re-embedding stopped at resource %s", resource_id, exc_info=True)
-                break
+                # One odd resource is skipped, so it cannot hold up the rest (it keeps its old chunks and is tried again
+                # next run). Several failures in a row mean the model itself is not answering: stop until next run.
+                failures_in_a_row += 1
+                log.warning("Re-embedding failed for resource %s", resource_id, exc_info=True)
+                if failures_in_a_row >= MAX_FAILURES_IN_A_ROW:
+                    break
         return done
 
     async def _one(self, user_id: uuid.UUID, resource_id: uuid.UUID) -> None:

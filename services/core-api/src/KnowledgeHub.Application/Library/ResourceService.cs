@@ -232,6 +232,12 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
                 foreach (var r in resources) { r.DeletedAt = null; changed.Add(r); }
                 break;
             case BulkAction.AddTags:
+                // The same limit as a single edit (TagNames.MaxPerResource), checked for every resource before anything changes.
+                var over = resources.Count(r => r.ResourceTags.Select(rt => rt.Tag.Name).Union(tagNames).Count() > TagNames.MaxPerResource);
+                if (over > 0)
+                    throw AppException.Field("tags", over == 1
+                        ? $"One of these resources would have more than {TagNames.MaxPerResource} tags."
+                        : $"{over} of these resources would have more than {TagNames.MaxPerResource} tags.");
                 var tags = await _tags.EnsureAsync(userId, tagNames, ct);
                 foreach (var r in resources)
                 {

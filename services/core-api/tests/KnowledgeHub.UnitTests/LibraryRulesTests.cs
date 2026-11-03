@@ -35,6 +35,23 @@ public class UrlNormalizerTests
     }
 
     [Theory]
+    [InlineData("https://example.com/s?abc", "https://example.com/s?def")]
+    [InlineData("https://example.com/watch?v=1&flag", "https://example.com/watch?v=1")]
+    public void Query_parts_without_a_name_still_tell_links_apart(string a, string b)
+    {
+        Assert.True(UrlNormalizer.TryNormalize(a, out var na));
+        Assert.True(UrlNormalizer.TryNormalize(b, out var nb));
+        Assert.NotEqual(na, nb);
+    }
+
+    [Fact]
+    public void A_bare_query_part_is_kept_and_tracking_is_still_dropped()
+    {
+        Assert.True(UrlNormalizer.TryNormalize("https://example.com/s?abc&utm_source=x", out var n));
+        Assert.Equal("https://example.com/s?abc", n);
+    }
+
+    [Theory]
     [InlineData(null)]
     [InlineData("")]
     [InlineData("   ")]

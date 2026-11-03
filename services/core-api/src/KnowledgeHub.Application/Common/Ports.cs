@@ -33,6 +33,9 @@ public interface IAppDbContext
     Microsoft.EntityFrameworkCore.Infrastructure.DatabaseFacade Database { get; }
     Microsoft.EntityFrameworkCore.ChangeTracking.ChangeTracker ChangeTracker { get; }
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Creates the user's tags with these names, skipping any that exist already, even one created a moment ago.</summary>
+    Task InsertTagsIfMissingAsync(Guid userId, IReadOnlyCollection<string> names, CancellationToken ct);
 }
 
 public interface IPasswordHasher

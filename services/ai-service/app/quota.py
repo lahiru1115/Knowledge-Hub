@@ -30,6 +30,18 @@ def estimate_tokens(words: int) -> int:
     return (words * 4 + 2) // 3
 
 
+#: Tokens a call of each kind is assumed to use while it runs, so calls started together count against the daily cost
+#: cap before any of them has finished. Generous on purpose: finish() replaces the estimate with the real figure, and
+#: cancel() removes it.
+ESTIMATED_TOKENS: dict[str, tuple[int, int]] = {
+    "summarize": (4000, 400),
+    "suggest_tags": (2000, 100),
+    "chat": (6000, 800),
+    "embed": (2000, 0),
+    "search": (50, 0),
+}
+
+
 @dataclass(frozen=True)
 class Reservation:
     id: uuid.UUID
@@ -64,12 +76,21 @@ class UsageMeter:
         start, reset = day_bounds(now)
         limit = self._quotas.get(operation)
         rid = uuid.uuid4()
+        capped = self._daily_cost_cap is not None and self._costs.has(model)
+        estimate = self._costs.cost(model, *ESTIMATED_TOKENS.get(operation, (0, 0))) if self._costs.has(model) else 0.0
         async with self._engine.begin() as conn:
+            if capped:
+                # One lock per user for the spending cap, taken before the per-operation one (always in this order, so
+                # two calls cannot wait on each other): a chat and a summary started together check the cap in turn.
+                await conn.execute(
+                    text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": f"{user_id}:cost"}
+                )
             await conn.execute(
                 text("SELECT pg_advisory_xact_lock(hashtextextended(:k, 0))"), {"k": f"{user_id}:{operation}"}
             )
-            # A paid model also has a spending cap per user per day (Doc 02 §4.6), on top of the count limits.
-            if self._daily_cost_cap is not None and self._costs.has(model):
+            # A paid model also has a spending cap per user per day (Doc 02 §4.6), on top of the count limits. Calls
+            # still running count with their estimate, so they cannot all slip under it together.
+            if capped and self._daily_cost_cap is not None:
                 spent = (
                     await conn.execute(
                         text("SELECT coalesce(sum(cost_usd), 0) FROM ai.usage WHERE user_id = :u AND created_at >= :s"),
@@ -93,10 +114,18 @@ class UsageMeter:
                     raise ApiError(429, "ai_quota_exceeded", reset_at=reset.isoformat(), retry_after=wait)
             await conn.execute(
                 text(
-                    "INSERT INTO ai.usage (id, user_id, operation, provider, model, created_at) "
-                    "VALUES (:id, :u, :o, :p, :m, :t)"
+                    "INSERT INTO ai.usage (id, user_id, operation, provider, model, cost_usd, created_at) "
+                    "VALUES (:id, :u, :o, :p, :m, :c, :t)"
                 ),
-                {"id": rid, "u": user_id, "o": operation, "p": provider or self._provider, "m": model, "t": now},
+                {
+                    "id": rid,
+                    "u": user_id,
+                    "o": operation,
+                    "p": provider or self._provider,
+                    "m": model,
+                    "c": estimate,
+                    "t": now,
+                },
             )
         return Reservation(rid, user_id, model)
 
