@@ -51,6 +51,16 @@ public sealed class RecordingAi : IAiClient
         return Task.FromResult(UsageAnswer());
     }
 
+    public ConcurrentQueue<Guid?> AdminUsageCalls { get; } = new();
+    public Func<Guid?, IReadOnlyList<AiAdminUsageRow>> AdminUsageAnswer { get; set; } = _ => [];
+
+    public Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct)
+    {
+        if (Failure?.Invoke() is { } e) throw e;
+        AdminUsageCalls.Enqueue(userId);
+        return Task.FromResult(AdminUsageAnswer(userId));
+    }
+
     public ConcurrentQueue<(Guid User, string Query, int Limit)> Searches { get; } = new();
     public Func<Guid, IReadOnlyList<AiSearchHit>> SearchAnswer { get; set; } = _ => [];
     public ConcurrentQueue<(Guid User, Guid Resource, int Limit)> RelatedCalls { get; } = new();

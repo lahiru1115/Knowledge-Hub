@@ -59,6 +59,13 @@ public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStat
         return new AiUsageInfo(r.ResetAt, [.. r.Items.Select(i => new AiUsageItem(i.Operation, i.Used, i.Limit))]);
     }
 
+    public async Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct)
+    {
+        var path = userId is { } id ? $"admin/usage?user_id={id}" : "admin/usage";
+        var r = Parse<AdminUsageResponse>(await SendAsync(HttpMethod.Get, path, tokens.ForSystem("usage:read_all"), null, O.OtherTimeoutSeconds, ct));
+        return [.. r.Items.Select(i => new AiAdminUsageRow(i.Date, i.UserId, i.Operation, i.Calls, i.TokensIn, i.TokensOut, i.CostUsd))];
+    }
+
     public async Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct)
     {
         var body = await SendAsync(HttpMethod.Post, "search", tokens.ForUser(userId),
@@ -218,6 +225,8 @@ public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStat
     private sealed record SummaryResponse(string Summary, string Source, string Model);
     private sealed record TagItem(string Name, bool Existing);
     private sealed record TagsResponse(List<TagItem> Items);
+    private sealed record AdminUsageItem(DateOnly Date, Guid? UserId, string Operation, int Calls, int TokensIn, int TokensOut, decimal CostUsd);
+    private sealed record AdminUsageResponse(List<AdminUsageItem> Items);
     private sealed record UsageItem(string Operation, int Used, int? Limit);
     private sealed record UsageResponse(DateTimeOffset ResetAt, List<UsageItem> Items);
     private sealed record ReadyResponse(string Status, string? Profile, bool ChatAvailable);
@@ -354,6 +363,8 @@ public sealed class DisabledAiClient : IAiClient
 
     public Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct) =>
         throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct) => Off<IReadOnlyList<AiAdminUsageRow>>();
 
     public Task<AiChatSession> CreateChatSessionAsync(Guid userId, Guid? scopeCollectionId, CancellationToken ct) => Off<AiChatSession>();
     public Task<IReadOnlyList<AiChatSession>> ListChatSessionsAsync(Guid userId, CancellationToken ct) => Off<IReadOnlyList<AiChatSession>>();

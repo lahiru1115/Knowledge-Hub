@@ -29,6 +29,12 @@ public interface IAiClient
 
     Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct);
 
+    /// <summary>
+    /// Usage and cost per day for the last 30 days, for the administrator. For one user, or totals over everyone
+    /// (rows then have no user). Uses a system token with the <c>usage:read_all</c> scope.
+    /// </summary>
+    Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct);
+
     /// <summary>Hybrid search over the user's chunks: at most one hit per resource, best first.</summary>
     Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct);
 
@@ -53,6 +59,7 @@ public interface IAiClient
     Task<AiStatusInfo> GetStatusAsync(CancellationToken ct);
 }
 
+public sealed record AiAdminUsageRow(DateOnly Date, Guid? UserId, string Operation, int Calls, int TokensIn, int TokensOut, decimal CostUsd);
 public sealed record AiSummary(string Summary, string Source, string Model);
 public sealed record AiChatSession(Guid Id, string Title, Guid? ScopeCollectionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
 public sealed record AiChatCitation(int N, Guid ResourceId, string? Title, string? Quote);

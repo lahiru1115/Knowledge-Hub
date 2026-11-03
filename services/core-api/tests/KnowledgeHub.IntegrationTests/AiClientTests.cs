@@ -266,6 +266,29 @@ public sealed class AiClientTests : IAsyncLifetime
     }
 
     [Fact]
+    public async Task Admin_usage_asks_with_the_system_scope_and_reads_the_rows()
+    {
+        var user = Guid.NewGuid();
+        _respond = (_, _) => Results.Json(new
+        {
+            items = new object[] { new { date = "2026-11-02", operation = "chat", calls = 3, tokens_in = 120, tokens_out = 40, cost_usd = 0.012345 } },
+        });
+        using var sp = Build();
+        var ai = sp.GetRequiredService<IAiClient>();
+        var ct = TestContext.Current.CancellationToken;
+
+        var all = await ai.GetAdminUsageAsync(null, ct);
+        await ai.GetAdminUsageAsync(user, ct);
+
+        Assert.Equal([new AiAdminUsageRow(new DateOnly(2026, 11, 2), null, "chat", 3, 120, 40, 0.012345m)], all);
+        var calls = _seen.ToList();
+        Assert.Equal(("GET", "/admin/usage", ""), (calls[0].Method, calls[0].Path, calls[0].Query));
+        Assert.Equal($"?user_id={user}", calls[1].Query);
+        var token = await ValidateAsync(calls[0].Auth!);
+        Assert.Equal(("system", "usage:read_all"), (token.Subject, token.GetPayloadValue<string>("scope")));
+    }
+
+    [Fact]
     public async Task Usage_is_read_with_null_limits()
     {
         _respond = (_, _) => Results.Json(new
