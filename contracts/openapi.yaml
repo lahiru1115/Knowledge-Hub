@@ -238,7 +238,7 @@ paths:
               type: object
               required: [current_password, new_password]
               properties:
-                current_password: { type: string }
+                current_password: { type: string, minLength: 1, maxLength: 128 }
                 new_password: { type: string, minLength: 12, maxLength: 128 }
       responses:
         default: { $ref: '#/components/responses/UnexpectedError' }
@@ -386,7 +386,7 @@ paths:
       operationId: listResources
       summary: List, keyword search, filter, sort, paginate
       parameters:
-        - { name: q, in: query, schema: { type: string, maxLength: 200 } }
+        - { name: q, in: query, schema: { type: string, maxLength: 500 } }
         - name: type
           in: query
           style: form
@@ -397,7 +397,7 @@ paths:
           description: Repeatable; all must match
           style: form
           explode: true
-          schema: { type: array, items: { type: string } }
+          schema: { type: array, items: { $ref: '#/components/schemas/TagName' } }
         - name: collection_id
           in: query
           description: A collection ID, or the literal `inbox`
@@ -445,7 +445,7 @@ paths:
       operationId: checkResourceUrl
       summary: Duplicate check
       parameters:
-        - { name: url, in: query, required: true, schema: { type: string, maxLength: 2048 } }
+        - { name: url, in: query, required: true, schema: { type: string, minLength: 1, maxLength: 2048, pattern: '^https?://[^\s/?#]+\S*$' } }
       responses:
         default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
@@ -580,7 +580,7 @@ paths:
             schema:
               type: object
               required: [url]
-              properties: { url: { type: string, maxLength: 2048 } }
+              properties: { url: { type: string, minLength: 1, maxLength: 2048, pattern: '^https?://[^\s/?#]+\S*$' } }
       responses:
         default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
@@ -810,8 +810,11 @@ paths:
               type: object
               description: Exactly one of `url` or `resource_id`
               properties:
-                url: { type: string, maxLength: 2048 }
+                url: { type: string, minLength: 1, maxLength: 2048, pattern: '^https?://[^\s/?#]+\S*$' }
                 resource_id: { $ref: '#/components/schemas/Id' }
+              oneOf:
+                - required: [url]
+                - required: [resource_id]
       responses:
         default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
@@ -902,7 +905,7 @@ paths:
       summary: Semantic search (page is always 1)
       parameters:
         - { name: q, in: query, required: true, description: 'Max 500 characters (SRS Appendix C)', schema: { type: string, minLength: 1, maxLength: 500 } }
-        - $ref: '#/components/parameters/PageSize'
+        - { name: page_size, in: query, description: Up to 50 results, schema: { type: integer, minimum: 1, maximum: 50, default: 20 } }
       responses:
         default: { $ref: '#/components/responses/UnexpectedError' }
         '200':
@@ -1178,7 +1181,7 @@ components:
     Page:
       name: page
       in: query
-      schema: { type: integer, minimum: 1, default: 1 }
+      schema: { type: integer, minimum: 1, maximum: 100000, default: 1 }
     PageSize:
       name: page_size
       in: query
@@ -1361,17 +1364,17 @@ components:
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: [string, 'null'], maxLength: 500 }
-        color: { type: [string, 'null'] }
-        icon: { type: [string, 'null'] }
+        color: { type: [string, 'null'], enum: [slate, teal, blue, violet, rose, amber, green, orange, null] }
+        icon: { type: [string, 'null'], maxLength: 16, description: A single emoji }
     CollectionUpdate:
       type: object
       properties:
         name: { type: string, minLength: 1, maxLength: 100 }
         description: { type: [string, 'null'], maxLength: 500 }
-        color: { type: [string, 'null'] }
-        icon: { type: [string, 'null'] }
+        color: { type: [string, 'null'], enum: [slate, teal, blue, violet, rose, amber, green, orange, null] }
+        icon: { type: [string, 'null'], maxLength: 16, description: A single emoji }
         is_pinned: { type: boolean }
-        expected_updated_at: { type: string, format: date-time }
+        expected_updated_at: { type: [string, 'null'], format: date-time }
 
     Tag:
       type: object
@@ -1423,43 +1426,43 @@ components:
       type: object
       required: [url]
       properties:
-        url: { type: string, maxLength: 2048, pattern: '^https?://' }
-        title: { type: string, maxLength: 300 }
-        description: { type: string, maxLength: 2000 }
-        notes: { type: string, maxLength: 100000 }
-        type: { $ref: '#/components/schemas/ResourceType' }
+        url: { type: string, minLength: 1, maxLength: 2048, pattern: '^https?://[^\s/?#]+\S*$' }
+        title: { type: [string, 'null'], maxLength: 300 }
+        description: { type: [string, 'null'], maxLength: 2000 }
+        notes: { type: [string, 'null'], maxLength: 100000 }
+        type: { oneOf: [{ $ref: '#/components/schemas/ResourceType' }, { type: 'null' }], description: Null or left out means detect it from the link }
         collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
         tags:
-          type: array
+          type: [array, 'null']
           maxItems: 20
           items: { $ref: '#/components/schemas/TagName' }
         ai_tags:
-          type: array
+          type: [array, 'null']
           maxItems: 20
           description: Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`.
           items: { $ref: '#/components/schemas/TagName' }
     ResourceUpdate:
       type: object
       properties:
-        url: { type: string, maxLength: 2048, pattern: '^https?://' }
+        url: { type: string, minLength: 1, maxLength: 2048, pattern: '^https?://[^\s/?#]+\S*$' }
         title: { type: [string, 'null'], maxLength: 300 }
         description: { type: [string, 'null'], maxLength: 2000 }
         notes: { type: [string, 'null'], maxLength: 100000 }
         type: { $ref: '#/components/schemas/ResourceType' }
         collection_id: { oneOf: [{ $ref: '#/components/schemas/Id' }, { type: 'null' }] }
         tags:
-          type: array
+          type: [array, 'null']
           maxItems: 20
           items: { $ref: '#/components/schemas/TagName' }
         ai_tags:
-          type: array
+          type: [array, 'null']
           maxItems: 20
           description: Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`.
           items: { $ref: '#/components/schemas/TagName' }
         is_favourite: { type: boolean }
         is_archived: { type: boolean }
         summary: { type: [string, 'null'], maxLength: 2000, description: Setting it marks the source `user` }
-        expected_updated_at: { type: string, format: date-time }
+        expected_updated_at: { type: [string, 'null'], format: date-time }
     ResourcePage:
       type: object
       required: [items, page, page_size, total]

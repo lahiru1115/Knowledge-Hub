@@ -42,6 +42,16 @@ public sealed class TestClient
         return response;
     }
 
+    /// <summary>Sends exactly this JSON text, for bodies that serialisation would change.</summary>
+    public async Task<HttpResponseMessage> SendRawJsonAsync(HttpMethod method, string path, string json)
+    {
+        using var request = new HttpRequestMessage(method, path) { Content = new StringContent(json, System.Text.Encoding.UTF8, "application/json") };
+        if (Csrf is not null) request.Headers.Add("X-CSRF-Token", Csrf);
+        var response = await _http.SendAsync(request, TestContext.Current.CancellationToken);
+        Capture(response);
+        return response;
+    }
+
     /// <summary>
     /// Sends POST /auth/refresh with a specific (possibly old) refresh token, bypassing the cookie jar,
     /// the way an attacker replaying a stolen cookie would.

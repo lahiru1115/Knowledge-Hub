@@ -104,7 +104,10 @@ builder.Services.AddKnowledgeHubRateLimiting();
 
 var app = builder.Build();
 
+app.UseMiddleware<SecurityHeadersMiddleware>();   // first, so error responses carry the headers too
 app.UseExceptionHandler();
+app.UseMiddleware<UnmatchedApiRouteMiddleware>();
+app.UseMiddleware<NullCharacterMiddleware>();
 app.UseMiddleware<CsrfMiddleware>();
 app.UseAuthentication();
 app.UseRateLimiter();

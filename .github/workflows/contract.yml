@@ -1,10 +1,10 @@
 name: contract
 on:
   pull_request:
-    paths: ["contracts/**", ".github/workflows/contract.yml"]
+    paths: ["contracts/**", "services/core-api/**", ".github/workflows/contract.yml"]
   push:
     branches: [main]
-    paths: ["contracts/**", ".github/workflows/contract.yml"]
+    paths: ["contracts/**", "services/core-api/**", ".github/workflows/contract.yml"]
 permissions:
   contents: read
 concurrency:
@@ -22,5 +22,51 @@ jobs:
         run: pip install openapi-spec-validator==0.7.1 pyyaml==6.0.2
       - name: Validate OpenAPI 3.1 and operationId uniqueness
         run: python .github/scripts/validate_contract.py contracts/openapi.yaml
-  # Stage 7: add a job that composes the stack, runs Schemathesis with
-  # contracts/schemathesis.toml, and compares the API's generated document with oasdiff.
+  # Runs the real Core API against a real PostgreSQL and fuzzes every operation from the contract (Doc 02 §8.1).
+  schemathesis:
+    runs-on: ubuntu-latest
+    needs: validate
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_DB: knowledge_hub
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d knowledge_hub" --health-interval 5s --health-retries 10
+    env:
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: services/core-api/global.json
+      - uses: astral-sh/setup-uv@v5
+      - name: Create roles and schemas
+        run: psql -h localhost -U postgres -d knowledge_hub -v ON_ERROR_STOP=1 -f infra/db/init.sql
+      - name: Migrate and build
+        working-directory: services/core-api
+        run: |
+          dotnet tool install --global dotnet-ef --version "10.0.*"
+          dotnet ef database update --project src/KnowledgeHub.Infrastructure --connection \
+            "Host=localhost;Database=knowledge_hub;Username=core_migrator;Password=core_migrator_dev"
+          dotnet publish src/KnowledgeHub.Api/KnowledgeHub.Api.csproj -c Release -o "$RUNNER_TEMP/api"
+      - name: Start the API
+        env:
+          ConnectionStrings__Core: Host=localhost;Database=knowledge_hub;Username=core_app;Password=core_app_dev
+          Auth__SigningKey: ci-signing-key-0123456789abcdef0123456789
+          Auth__RateLimits__RegisterPerIpPerHour: "100000"
+          Auth__RateLimits__LoginPerIpPerMinute: "100000"
+          Auth__RateLimits__GeneralPerUserPerMinute: "1000000"
+          Auth__RateLimits__PreviewPerUserPerMinute: "1000000"
+          Auth__RateLimits__ExportPerUserPerMinute: "1000000"
+          ASPNETCORE_URLS: http://localhost:8080
+        run: |
+          nohup dotnet "$RUNNER_TEMP/api/KnowledgeHub.Api.dll" > "$RUNNER_TEMP/api.log" 2>&1 &
+          for i in $(seq 1 30); do curl -fsS http://localhost:8080/health/live && break; sleep 1; done
+      - name: Schemathesis
+        run: contracts/run-schemathesis.sh http://localhost:8080
+      - name: API log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/api.log"

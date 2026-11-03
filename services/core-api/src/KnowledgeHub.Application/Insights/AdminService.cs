@@ -20,7 +20,7 @@ public sealed class AdminService(IAppDbContext db, IClock clock, SessionIssuer s
         var number = page ?? 1;
         var size = pageSize ?? 20;
         var errors = new Dictionary<string, string[]>();
-        if (number < 1) errors["page"] = ["Must be 1 or more."];
+        if (number is < 1 or > Library.ResourceService.MaxPage) errors["page"] = [$"Must be between 1 and {Library.ResourceService.MaxPage}."];
         if (size is < 1 or > MaxPageSize) errors["page_size"] = [$"Must be between 1 and {MaxPageSize}."];
         if (errors.Count > 0) throw new AppException(ProblemCode.ValidationFailed, "One or more fields are not valid.") { Errors = errors };
 

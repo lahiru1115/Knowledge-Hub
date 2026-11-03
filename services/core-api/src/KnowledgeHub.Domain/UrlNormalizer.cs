@@ -37,6 +37,17 @@ public static class UrlNormalizer
         if (!Uri.TryCreate(url.Trim(), UriKind.Absolute, out var parsed)) return false;
         if (parsed.Scheme is not ("http" or "https")) return false;
         if (string.IsNullOrEmpty(parsed.Host)) return false;
+        try
+        {
+            // Reading it is what fails for a host that is not a valid internationalised name; the rest of the
+            // code reads it freely, so a URL like that must be refused here.
+            _ = parsed.IdnHost;
+        }
+        catch (UriFormatException)
+        {
+            return false;
+        }
+
         uri = parsed;
         return true;
     }

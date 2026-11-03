@@ -28,3 +28,37 @@ jobs:
       - uses: actions/dependency-review-action@v4
         with:
           fail-on-severity: high
+  # Known-vulnerable packages in what is actually shipped. These run on a schedule too, because advisories
+  # appear after a dependency was added.
+  audit-dotnet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: services/core-api/global.json
+      - name: Fail on a vulnerable package, direct or transitive
+        working-directory: services/core-api
+        run: |
+          dotnet list package --vulnerable --include-transitive 2>&1 | tee audit.txt
+          ! grep -qE "^\s+>" audit.txt
+  audit-npm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Fail on a high-severity vulnerability in what ships
+        working-directory: apps/web
+        run: npm ci --ignore-scripts && npm audit --omit=dev --audit-level=high
+  audit-python:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Fail on a known vulnerability in the locked set
+        working-directory: services/ai-service
+        run: |
+          uv export --no-hashes --frozen > requirements.audit.txt
+          uvx pip-audit -r requirements.audit.txt --no-deps --disable-pip

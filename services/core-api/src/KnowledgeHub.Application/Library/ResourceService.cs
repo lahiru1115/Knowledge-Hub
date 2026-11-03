@@ -12,6 +12,8 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
 {
     public static readonly TimeSpan UndoWindow = TimeSpan.FromDays(7);
     public const int MaxPageSize = 100;
+    public const int MaxQueryLength = 500;
+    public const int MaxPage = 100_000;
     public const int MaxBulk = 100;
 
     private readonly TagResolver _tags = new(db);
@@ -347,6 +349,7 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         }
 
         var query = r.Q?.Trim();
+        if (r.Q is { Length: > MaxQueryLength }) errors.Add("q", $"Use {MaxQueryLength} characters or fewer.");
         var hasQuery = !string.IsNullOrEmpty(query);
         ResourceSort sort;
         if (string.IsNullOrEmpty(r.Sort)) sort = hasQuery ? ResourceSort.Relevance : ResourceSort.Newest;
@@ -359,12 +362,12 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         if (sort == ResourceSort.Relevance && !hasQuery) sort = ResourceSort.Newest; // nothing to rank by
         var page = r.Page ?? 1;
         var pageSize = r.PageSize ?? 20;
-        if (page < 1) errors.Add("page", "Must be 1 or more.");
+        if (page is < 1 or > MaxPage) errors.Add("page", $"Must be between 1 and {MaxPage}.");
         if (pageSize is < 1 or > MaxPageSize) errors.Add("page_size", $"Must be between 1 and {MaxPageSize}.");
         errors.ThrowIfAny();
 
         // A collection from another user simply matches nothing; the list never says whether it exists.
         return new ResourceFilter(query, types, tags, collectionId, inbox, r.Favourite, r.Archived ?? false,
-            r.CreatedFrom, r.CreatedTo, sort, page, pageSize);
+            r.CreatedFrom?.ToUniversalTime(), r.CreatedTo?.ToUniversalTime(), sort, page, pageSize);   // the database takes UTC only
     }
 }

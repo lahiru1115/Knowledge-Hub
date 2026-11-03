@@ -876,17 +876,21 @@ export interface components {
         CollectionCreate: {
             name: string;
             description?: string | null;
-            color?: string | null;
+            /** @enum {string|null} */
+            color?: "slate" | "teal" | "blue" | "violet" | "rose" | "amber" | "green" | "orange" | null;
+            /** @description A single emoji */
             icon?: string | null;
         };
         CollectionUpdate: {
             name?: string;
             description?: string | null;
-            color?: string | null;
+            /** @enum {string|null} */
+            color?: "slate" | "teal" | "blue" | "violet" | "rose" | "amber" | "green" | "orange" | null;
+            /** @description A single emoji */
             icon?: string | null;
             is_pinned?: boolean;
             /** Format: date-time */
-            expected_updated_at?: string;
+            expected_updated_at?: string | null;
         };
         Tag: {
             id: components["schemas"]["Id"];
@@ -921,14 +925,15 @@ export interface components {
         };
         ResourceCreate: {
             url: string;
-            title?: string;
-            description?: string;
-            notes?: string;
-            type?: components["schemas"]["ResourceType"];
+            title?: string | null;
+            description?: string | null;
+            notes?: string | null;
+            /** @description Null or left out means detect it from the link */
+            type?: components["schemas"]["ResourceType"] | null;
             collection_id?: components["schemas"]["Id"] | null;
-            tags?: components["schemas"]["TagName"][];
+            tags?: components["schemas"]["TagName"][] | null;
             /** @description Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`. */
-            ai_tags?: components["schemas"]["TagName"][];
+            ai_tags?: components["schemas"]["TagName"][] | null;
         };
         ResourceUpdate: {
             url?: string;
@@ -937,15 +942,15 @@ export interface components {
             notes?: string | null;
             type?: components["schemas"]["ResourceType"];
             collection_id?: components["schemas"]["Id"] | null;
-            tags?: components["schemas"]["TagName"][];
+            tags?: components["schemas"]["TagName"][] | null;
             /** @description Subset of `tags` that came from an accepted AI suggestion (stored as tag source `ai`, FR-AI-04). Other tags are stored as `user`. */
-            ai_tags?: components["schemas"]["TagName"][];
+            ai_tags?: components["schemas"]["TagName"][] | null;
             is_favourite?: boolean;
             is_archived?: boolean;
             /** @description Setting it marks the source `user` */
             summary?: string | null;
             /** Format: date-time */
-            expected_updated_at?: string;
+            expected_updated_at?: string | null;
         };
         ResourcePage: {
             items: components["schemas"]["Resource"][];
@@ -1736,7 +1741,7 @@ export interface operations {
                 q?: string;
                 type?: components["schemas"]["ResourceType"][];
                 /** @description Repeatable; all must match */
-                tag?: string[];
+                tag?: components["schemas"]["TagName"][];
                 /** @description A collection ID, or the literal `inbox` */
                 collection_id?: string;
                 favourite?: boolean;
@@ -2329,7 +2334,7 @@ export interface operations {
                 "application/json": {
                     url?: string;
                     resource_id?: components["schemas"]["Id"];
-                };
+                } & (unknown | unknown);
             };
         };
         responses: {
@@ -2444,7 +2449,8 @@ export interface operations {
             query: {
                 /** @description Max 500 characters (SRS Appendix C) */
                 q: string;
-                page_size?: components["parameters"]["PageSize"];
+                /** @description Up to 50 results */
+                page_size?: number;
             };
             header?: never;
             path?: never;

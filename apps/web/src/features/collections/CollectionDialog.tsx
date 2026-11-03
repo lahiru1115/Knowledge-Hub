@@ -18,6 +18,9 @@ import { Textarea } from '@/components/ui/textarea'
 import { COLLECTION_COLORS, type Collection } from '@/features/library/types'
 import { cn } from '@/lib/utils'
 import { useCreateCollection, useUpdateCollection } from './collectionMutations'
+import type { components } from '@/api/schema'
+
+type CollectionColor = NonNullable<components['schemas']['CollectionCreate']['color']>
 
 /** Tailwind classes for the collection colour swatches (the colours are named, not free-form: FR-COL-02). */
 export const COLOR_CLASS: Record<string, string> = {
@@ -63,7 +66,7 @@ export function CollectionDialog({
       name: name.trim(),
       description: description.trim() || null,
       icon: icon.trim() || null,
-      color: color || null,
+      color: (color || null) as CollectionColor | null,
     }
     try {
       const saved = collection

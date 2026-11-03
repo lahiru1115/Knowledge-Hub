@@ -45,6 +45,7 @@ public class UrlNormalizerTests
     [InlineData("data:text/html,<script>")]
     [InlineData("https://")]
     [InlineData("//example.com")]
+    [InlineData("http://E0\u00e8\U00016E1D\U00011897I\u00eb")]   // a host that is not a valid internationalised name once threw while it was read
     public void Rejects_anything_that_is_not_an_http_or_https_address(string? input)
     {
         Assert.False(UrlNormalizer.IsValid(input));
