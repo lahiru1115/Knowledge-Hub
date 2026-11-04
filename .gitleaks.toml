@@ -1,0 +1,30 @@
+# Secret scanning (.github/workflows/security.yml). The default rules stay on; this only allows the local
+# development passwords that infra/db/init.sql, compose.yaml, the CI workflows and the tests use on purpose.
+# They are placeholders for a throwaway database on localhost or in a CI container, never for a real one
+# (infra/deploy/make-init.sh generates real ones). Allowed by value, not by path, so a real secret added to the
+# same files is still reported.
+title = "Knowledge Hub"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Local development database role passwords from infra/db/init.sql"
+regexTarget = "match"
+regexes = [
+  '''(core_migrator|core_app|ai_migrator|ai_app)_dev''',
+]
+
+[[allowlists]]
+description = "The default PostgreSQL superuser password of the throwaway local and CI database"
+regexTarget = "match"
+regexes = [
+  '''(?i)password["']?\s*[:=]\s*["']?(\$\{[A-Za-z_]+:-)?postgres(["'}\s]|$)''',
+]
+
+[[allowlists]]
+description = "Throwaway signing keys and shared secrets that only the test hosts and the CI job use (never a real deployment's)"
+regexTarget = "match"
+regexes = [
+  '''(a-different-secret-0123456789abcdefghij|ci-signing-key-0123456789abcdef0123456789|integration-service-secret-0123456789abcdef|integration-test-signing-key-0123456789abcdef|unit-test-service-secret-0123456789abcdef|unit-test-signing-key-that-is-long-enough-0123456789)(?:[^A-Za-z0-9-]|$)''',
+]

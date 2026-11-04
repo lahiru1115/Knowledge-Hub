@@ -1,0 +1,79 @@
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useQueryClient } from '@tanstack/react-query'
+import { Link, useRouter } from '@tanstack/react-router'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
+import { z } from 'zod'
+import { ApiProblem, api, unwrap } from '@/api/client'
+import { FormAlert } from '@/components/FormAlert'
+import { LoadingButton } from '@/components/loading-button'
+import { PasswordField } from '@/components/form-field'
+import { applyProblem } from '@/features/auth/formErrors'
+import { ExportLinks } from './DataSection'
+
+const schema = z.object({ password: z.string().min(1, 'Enter your password to confirm.') })
+type Values = z.infer<typeof schema>
+
+/** A page, not a small dialog: it says what will be deleted and asks for the password (Doc 03 §5.8). */
+export function DeleteAccountPage() {
+  const router = useRouter()
+  const queryClient = useQueryClient()
+  const [formError, setFormError] = useState<string>()
+  const {
+    register,
+    handleSubmit,
+    setError,
+    formState: { errors, isSubmitting },
+  } = useForm<Values>({ resolver: zodResolver(schema) })
+
+  const onSubmit = handleSubmit(async (values) => {
+    setFormError(undefined)
+    try {
+      await unwrap(api.DELETE('/me', { body: values }))
+      queryClient.clear()
+      await router.navigate({ to: '/login', search: {} })
+    } catch (e) {
+      if (e instanceof ApiProblem && e.code === 'invalid_credentials') {
+        setError('password', { type: 'server', message: "That password isn't right. Try again." })
+        return
+      }
+      setFormError(applyProblem(e, setError, ['password']))
+    }
+  })
+
+  return (
+    <section aria-labelledby="delete-title" className="max-w-md space-y-4">
+      <h2 id="delete-title" className="text-xl font-semibold">
+        Delete your account
+      </h2>
+      <p className="text-sm">This permanently deletes:</p>
+      <ul className="list-disc space-y-1 pl-5 text-sm">
+        <li>Your account and sign-in details</li>
+        <li>Everything you saved: resources, notes, collections and tags</li>
+        <li>Your search and chat history</li>
+      </ul>
+      <p className="text-sm text-muted-foreground">You can&apos;t undo this.</p>
+      <div className="space-y-2">
+        <p className="text-sm">Want a copy first?</p>
+        <ExportLinks />
+      </div>
+      <form onSubmit={(e) => void onSubmit(e)} noValidate className="space-y-4">
+        {formError && <FormAlert>{formError}</FormAlert>}
+        <PasswordField
+          label="Password"
+          autoComplete="current-password"
+          error={errors.password?.message}
+          {...register('password')}
+        />
+        <div className="flex items-center gap-3">
+          <LoadingButton type="submit" variant="destructive" loading={isSubmitting}>
+            Delete my account and data
+          </LoadingButton>
+          <Link to="/settings/account" className="text-sm font-medium underline">
+            Cancel
+          </Link>
+        </div>
+      </form>
+    </section>
+  )
+}

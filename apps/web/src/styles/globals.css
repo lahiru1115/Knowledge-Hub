@@ -1,0 +1,134 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/* Dark mode follows the `dark` class on <html> (set before React loads by the script in index.html). */
+@custom-variant dark (&:is(.dark *));
+
+/*
+ * Standard shadcn/ui theme wiring (Tailwind v4): components use semantic utilities such as bg-primary and
+ * text-muted-foreground, which read these variables.
+ */
+@theme inline {
+  --font-sans: 'Geist Variable', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, monospace;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Knowledge Hub additions (Doc 03 §7.1) that shadcn has no name for. */
+  --color-ai: var(--ai);
+  --color-ai-subtle: var(--ai-subtle);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+}
+
+/*
+ * Values: the Doc 03 §7.1 palette, mapped onto shadcn's variable names. Compared with shadcn's neutral
+ * defaults, the accent is teal and `--input` (the control outline) is the darker `border-control` value so
+ * form fields meet the 3:1 non-text contrast rule (WCAG 1.4.11). Component styles themselves are unchanged.
+ */
+:root {
+  --radius: 0.625rem;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+  --primary: #0f766e;
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5;
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5;
+  --muted-foreground: #52525b;
+  --accent: #f4f4f5;
+  --accent-foreground: #18181b;
+  --destructive: #b91c1c;
+  --border: #d4d4d8;
+  --input: #71717a;
+  --ring: #0f766e;
+
+  --ai: #6d28d9;
+  --ai-subtle: #f5f3ff;
+  --success: #15803d;
+  --warning: #b45309;
+}
+
+.dark {
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #18181b;
+  --card-foreground: #fafafa;
+  --popover: #18181b;
+  --popover-foreground: #fafafa;
+  --primary: #2dd4bf;
+  --primary-foreground: #09090b;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
+  --destructive: #f87171;
+  --border: #3f3f46;
+  --input: #71717a;
+  --ring: #2dd4bf;
+
+  --ai: #a78bfa;
+  --ai-subtle: #2e1065;
+  --success: #4ade80;
+  --warning: #fbbf24;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply min-h-dvh bg-background font-sans text-foreground antialiased;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Focused items must not hide behind the sticky top bar or the phone tab bar (WCAG 2.4.11). */
+html {
+  scroll-padding-top: 4.5rem;
+  scroll-padding-bottom: 5rem;
+}

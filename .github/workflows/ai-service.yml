@@ -1,0 +1,58 @@
+name: ai-service
+on:
+  pull_request:
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: ai-service-${{ github.ref }}
+  cancel-in-progress: true
+defaults:
+  run:
+    working-directory: services/ai-service
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: knowledge_hub
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGPASSWORD: postgres
+      AI_MIGRATOR_DATABASE_URL: postgresql://ai_migrator:ai_migrator_dev@localhost:5432/knowledge_hub
+      AI_TEST_MIGRATOR_URL: postgresql://ai_migrator:ai_migrator_dev@localhost:5432/knowledge_hub
+      AI_TEST_APP_URL: postgresql://ai_app:ai_app_dev@localhost:5432/knowledge_hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: services/ai-service/uv.lock
+      - run: uv sync --frozen
+      - name: Lint and format
+        run: |
+          uv run ruff check .
+          uv run ruff format --check .
+      - run: uv run mypy app
+      - name: Prepare the database (roles, schemas, extension)
+        run: psql -h localhost -U postgres -d knowledge_hub -v ON_ERROR_STOP=1 -f ../../infra/db/init.sql
+      - name: Migrate (as ai_migrator)
+        run: uv run alembic upgrade head
+      - name: Tests
+        run: uv run pytest -q
+      - name: Migrations go down and up again
+        run: |
+          uv run alembic downgrade base
+          uv run alembic upgrade head
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the image
+        run: docker build .   # this job already runs in services/ai-service (defaults.run.working-directory)

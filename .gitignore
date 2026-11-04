@@ -1,0 +1,12 @@
+.env
+node_modules/
+dist/
+bin/
+obj/
+__pycache__/
+.venv/
+*.pyc
+.idea/
+.vs/
+coverage/
+.schemathesis/

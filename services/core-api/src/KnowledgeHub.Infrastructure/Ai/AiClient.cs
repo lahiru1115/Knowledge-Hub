@@ -1,0 +1,406 @@
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Text.Json;
+using KnowledgeHub.Application.Common;
+using Microsoft.Extensions.Options;
+using Polly.CircuitBreaker;
+using Polly.Timeout;
+
+namespace KnowledgeHub.Infrastructure.Ai;
+
+public sealed class AiClient(HttpClient http, ServiceTokenFactory tokens, AiStatusCache statusCache, IOptions<AiOptions> options) : IAiClient
+{
+    private static readonly JsonSerializerOptions s_json = new(JsonSerializerDefaults.Web)
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+    };
+
+    private AiOptions O => options.Value;
+
+    public Task IndexAsync(Guid userId, Guid resourceId, AiIndexRequest request, CancellationToken ct) =>
+        SendAsync(HttpMethod.Put, $"index/{resourceId}", tokens.ForUser(userId),
+            JsonContent.Create(new
+            {
+                title = request.Title,
+                description = request.Description,
+                notes = request.Notes,
+                collection_id = request.CollectionId,
+                text = request.Text,
+            }, options: s_json), O.IndexTimeoutSeconds, ct);
+
+    public Task DeleteIndexAsync(Guid userId, Guid resourceId, bool forget, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, $"index/{resourceId}?forget={(forget ? "true" : "false")}", tokens.ForUser(userId),
+            null, O.OtherTimeoutSeconds, ct);
+
+    public Task PurgeUserAsync(Guid userId, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, $"users/{userId}", tokens.ForSystem("users:purge"), null, O.OtherTimeoutSeconds, ct);
+
+    public async Task<AiSummary> SummarizeAsync(Guid userId, Guid? resourceId, string? title, string? description, string? text, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Post, "summarize", tokens.ForUser(userId),
+            JsonContent.Create(new { resource_id = resourceId, title, description, text }, options: s_json), O.SummaryTimeoutSeconds, ct);
+        var r = Parse<SummaryResponse>(body);
+        return new AiSummary(r.Summary, r.Source, r.Model);
+    }
+
+    public async Task<IReadOnlyList<AiTagSuggestion>> SuggestTagsAsync(
+        Guid userId, Guid? resourceId, string? title, string? description, string? text,
+        IReadOnlyCollection<string> existingTags, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Post, "suggest-tags", tokens.ForUser(userId),
+            JsonContent.Create(new { resource_id = resourceId, title, description, text, existing_tags = existingTags }, options: s_json),
+            O.TagTimeoutSeconds, ct);
+        return [.. Parse<TagsResponse>(body).Items.Select(i => new AiTagSuggestion(i.Name, i.Existing))];
+    }
+
+    public async Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct)
+    {
+        var r = Parse<UsageResponse>(await SendAsync(HttpMethod.Get, "usage", tokens.ForUser(userId), null, O.OtherTimeoutSeconds, ct));
+        return new AiUsageInfo(r.ResetAt, [.. r.Items.Select(i => new AiUsageItem(i.Operation, i.Used, i.Limit))]);
+    }
+
+    public async Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct)
+    {
+        var path = userId is { } id ? $"admin/usage?user_id={id}" : "admin/usage";
+        var r = Parse<AdminUsageResponse>(await SendAsync(HttpMethod.Get, path, tokens.ForSystem("usage:read_all"), null, O.OtherTimeoutSeconds, ct));
+        return [.. r.Items.Select(i => new AiAdminUsageRow(i.Date, i.UserId, i.Operation, i.Calls, i.TokensIn, i.TokensOut, i.CostUsd))];
+    }
+
+    public async Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Post, "search", tokens.ForUser(userId),
+            JsonContent.Create(new { query, limit }, options: s_json), O.SearchTimeoutSeconds, ct);
+        return [.. Parse<SearchResponse>(body).Items.Select(i => new AiSearchHit(i.ResourceId, i.Snippet, i.Score))];
+    }
+
+    public async Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct)
+    {
+        var body = await SendAsync(HttpMethod.Get, $"resources/{resourceId}/related?limit={limit}", tokens.ForUser(userId),
+            null, O.SearchTimeoutSeconds, ct);
+        return [.. Parse<RelatedResponse>(body).Items.Select(i => new AiRelatedHit(i.ResourceId, i.Score))];
+    }
+
+    // ---- chat ----
+
+    public async Task<AiChatSession> CreateChatSessionAsync(Guid userId, Guid? scopeCollectionId, CancellationToken ct) =>
+        ToSession(Parse<SessionBody>(await SendAsync(HttpMethod.Post, "chat/sessions", tokens.ForUser(userId),
+            JsonContent.Create(new { scope_collection_id = scopeCollectionId }, options: s_json), O.OtherTimeoutSeconds, ct)));
+
+    public async Task<IReadOnlyList<AiChatSession>> ListChatSessionsAsync(Guid userId, CancellationToken ct) =>
+        [.. Parse<SessionList>(await SendAsync(HttpMethod.Get, "chat/sessions", tokens.ForUser(userId), null, O.OtherTimeoutSeconds, ct))
+            .Items.Select(ToSession)];
+
+    public async Task<AiChatDetail> GetChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct)
+    {
+        var d = Parse<DetailBody>(await SendAsync(HttpMethod.Get, $"chat/sessions/{sessionId}", tokens.ForUser(userId), null, O.OtherTimeoutSeconds, ct));
+        return new AiChatDetail(
+            new AiChatSession(d.Id, d.Title, d.ScopeCollectionId, d.CreatedAt, d.UpdatedAt),
+            [.. d.Messages.Select(m => new AiChatMessage(m.Id, m.Role, m.Content,
+                [.. m.Citations.Select(c => new AiChatCitation(c.N, c.ResourceId, c.Title, c.Quote))], m.CreatedAt))]);
+    }
+
+    public async Task<AiChatSession> RenameChatSessionAsync(Guid userId, Guid sessionId, string title, CancellationToken ct) =>
+        ToSession(Parse<SessionBody>(await SendAsync(HttpMethod.Patch, $"chat/sessions/{sessionId}", tokens.ForUser(userId),
+            JsonContent.Create(new { title }, options: s_json), O.OtherTimeoutSeconds, ct)));
+
+    public Task DeleteChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct) =>
+        SendAsync(HttpMethod.Delete, $"chat/sessions/{sessionId}", tokens.ForUser(userId), null, O.OtherTimeoutSeconds, ct);
+
+    public async Task<IAiChatAnswer> OpenChatAsync(Guid userId, Guid sessionId, string content, CancellationToken ct)
+    {
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"chat/sessions/{sessionId}/messages")
+        {
+            Content = JsonContent.Create(new { content }, options: s_json),
+        };
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.ForUser(userId));
+        HttpResponseMessage response;
+        try
+        {
+            using var wait = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            wait.CancelAfter(TimeSpan.FromSeconds(O.OtherTimeoutSeconds));
+            response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, wait.Token);
+        }
+        catch (BrokenCircuitException e)
+        {
+            throw new AiUnavailableException("The AI service is not answering (circuit open).", e);
+        }
+        catch (Exception e) when (e is HttpRequestException or TimeoutRejectedException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            throw new AiUnavailableException("The AI service did not answer.", e);
+        }
+        if (!response.IsSuccessStatusCode)
+        {
+            using (response) await ThrowForStatusAsync(response, HttpMethod.Post, $"chat/sessions/{sessionId}/messages", ct);
+        }
+        return new AiChatAnswer(response, O.ChatFirstEventSeconds, O.ChatTotalSeconds);
+    }
+
+    private static async Task ThrowForStatusAsync(HttpResponseMessage response, HttpMethod method, string path, CancellationToken ct)
+    {
+        var body = await response.Content.ReadAsStringAsync(ct);
+        var status = (int)response.StatusCode;
+        if (status >= 500) throw new AiUnavailableException($"The AI service answered {status}.");
+        if (TryRejection(status, body) is { } rejected) throw rejected;
+        throw new InvalidOperationException($"The AI service refused {method} {path}: {status} {body}");
+    }
+
+    private static AiChatSession ToSession(SessionBody b) => new(b.Id, b.Title, b.ScopeCollectionId, b.CreatedAt, b.UpdatedAt);
+
+    public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => statusCache.GetAsync(async () =>
+    {
+        try
+        {
+            // Short timeout and no token: the readiness check is public inside the private network.
+            var body = await SendAsync(HttpMethod.Get, "health/ready", null, null, O.StatusTimeoutSeconds, ct);
+            var r = Parse<ReadyResponse>(body);
+            return new AiStatusInfo(r.Status == "ok", r.Profile ?? O.Profile, r.ChatAvailable);
+        }
+        catch (AiUnavailableException)
+        {
+            return new AiStatusInfo(false, O.Profile, false);
+        }
+    }, ct);
+
+    private static T Parse<T>(string body) =>
+        JsonSerializer.Deserialize<T>(body, s_json) ?? throw new InvalidOperationException("The AI service sent an empty answer.");
+
+    private async Task<string> SendAsync(HttpMethod method, string path, string? token, HttpContent? content, int timeoutSeconds, CancellationToken ct)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        timeout.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+        var operation = path.Split('/', '?')[0];   // "summarize", "search", "chat" …: no IDs, so the label stays small
+        var started = KhMetrics.Start();
+        var outcome = "ok";
+        try
+        {
+            return await SendCoreAsync(method, path, token, content, timeout, ct);
+        }
+        catch (Exception e)
+        {
+            outcome = e switch { AiUnavailableException => "unavailable", AiRejectedException => "rejected", _ => "error" };
+            throw;
+        }
+        finally
+        {
+            KhMetrics.AiCalls.Add(1, new KeyValuePair<string, object?>("operation", operation), new KeyValuePair<string, object?>("outcome", outcome));
+            KhMetrics.AiCallDuration.Record(KhMetrics.Seconds(started), new KeyValuePair<string, object?>("operation", operation));
+        }
+    }
+
+    private async Task<string> SendCoreAsync(HttpMethod method, string path, string? token, HttpContent? content, CancellationTokenSource timeout, CancellationToken ct)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(method, path) { Content = content };
+            if (token is not null) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            using var response = await http.SendAsync(request, timeout.Token);
+            var body = await response.Content.ReadAsStringAsync(timeout.Token);
+            if (response.IsSuccessStatusCode) return body;
+            var status = (int)response.StatusCode;
+            if (status >= 500) throw new AiUnavailableException($"The AI service answered {status}.");
+            if (TryRejection(status, body) is { } rejected) throw rejected;
+            // Any other 4xx means this request is wrong (or the shared secret is): retrying cannot fix it, but it must be visible.
+            throw new InvalidOperationException($"The AI service refused {method} {path}: {status} {body}");
+        }
+        catch (BrokenCircuitException e)
+        {
+            throw new AiUnavailableException("The AI service is not answering (circuit open).", e);
+        }
+        catch (Exception e) when (e is HttpRequestException or TimeoutRejectedException or TaskCanceledException && !ct.IsCancellationRequested)
+        {
+            throw new AiUnavailableException("The AI service did not answer.", e);
+        }
+    }
+
+    /// <summary>The two refusals the AI service sends on purpose; both are answers, not failures.</summary>
+    private static AiRejectedException? TryRejection(int status, string body)
+    {
+        if (status == 404) return new AiRejectedException(ProblemCode.NotFound);
+        if (status is not (422 or 429)) return null;
+        try
+        {
+            var p = JsonSerializer.Deserialize<ProblemBody>(body, s_json);
+            return p?.Code switch
+            {
+                "not_enough_content" => new AiRejectedException(ProblemCode.NotEnoughContent),
+                "ai_quota_exceeded" => new AiRejectedException(ProblemCode.AiQuotaExceeded, p.ResetAt, p.RetryAfter),
+                _ => null,
+            };
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    private sealed record ProblemBody(string? Code, DateTimeOffset? ResetAt, int? RetryAfter);
+    private sealed record SessionBody(Guid Id, string Title, Guid? ScopeCollectionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt);
+    private sealed record SessionList(List<SessionBody> Items);
+    private sealed record CitationBody(int N, Guid ResourceId, string? Title, string? Quote);
+    private sealed record MessageBody(Guid Id, string Role, string Content, List<CitationBody> Citations, DateTimeOffset CreatedAt);
+    private sealed record DetailBody(Guid Id, string Title, Guid? ScopeCollectionId, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt, List<MessageBody> Messages);
+    private sealed record SearchItem(Guid ResourceId, string Snippet, double Score);
+    private sealed record SearchResponse(List<SearchItem> Items);
+    private sealed record RelatedItem(Guid ResourceId, double Score);
+    private sealed record RelatedResponse(List<RelatedItem> Items);
+    private sealed record SummaryResponse(string Summary, string Source, string Model);
+    private sealed record TagItem(string Name, bool Existing);
+    private sealed record TagsResponse(List<TagItem> Items);
+    private sealed record AdminUsageItem(DateOnly Date, Guid? UserId, string Operation, int Calls, int TokensIn, int TokensOut, decimal CostUsd);
+    private sealed record AdminUsageResponse(List<AdminUsageItem> Items);
+    private sealed record UsageItem(string Operation, int Used, int? Limit);
+    private sealed record UsageResponse(DateTimeOffset ResetAt, List<UsageItem> Items);
+    private sealed record ReadyResponse(string Status, string? Profile, bool ChatAvailable);
+}
+
+/// <summary>Reads the AI service's server-sent events. A stall or a dropped connection ends it with an <c>error</c> event.</summary>
+internal sealed class AiChatAnswer(HttpResponseMessage response, double firstEventSeconds, double totalSeconds) : IAiChatAnswer
+{
+    public async IAsyncEnumerable<AiChatEvent> ReadAsync([System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct)
+    {
+        using var total = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        total.CancelAfter(TimeSpan.FromSeconds(totalSeconds));
+        StreamReader? opened = null;
+        try
+        {
+            opened = new StreamReader(await response.Content.ReadAsStreamAsync(total.Token));
+        }
+        catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException && !ct.IsCancellationRequested)
+        {
+            // handled below, since an iterator cannot yield from a catch block
+        }
+        if (opened is null)
+        {
+            yield return Error("ai_unavailable");
+            yield break;
+        }
+        var reader = opened;
+        using (reader)
+        {
+            string? name = null;
+            var data = new System.Text.StringBuilder();
+            var first = true;
+            while (true)
+            {
+                string? line;
+                AiChatEvent? failure = null;
+                try
+                {
+                    using var wait = CancellationTokenSource.CreateLinkedTokenSource(total.Token);
+                    if (first) wait.CancelAfter(TimeSpan.FromSeconds(firstEventSeconds));
+                    line = await reader.ReadLineAsync(wait.Token);
+                }
+                catch (Exception e) when (e is HttpRequestException or IOException or OperationCanceledException && !ct.IsCancellationRequested)
+                {
+                    line = null;
+                    failure = Error("ai_unavailable");
+                }
+                if (failure is not null)
+                {
+                    yield return failure;
+                    yield break;
+                }
+                if (line is null) yield break;   // the AI service closed the stream
+                if (line.Length == 0)
+                {
+                    if (name is not null && data.Length > 0)
+                    {
+                        first = false;
+                        var parsed = TryParse(data.ToString());
+                        if (parsed is null)
+                        {
+                            yield return Error("internal_error");
+                            yield break;
+                        }
+                        yield return new AiChatEvent(name, parsed.Value);
+                    }
+                    name = null;
+                    data.Clear();
+                }
+                else if (line.StartsWith("event:", StringComparison.Ordinal)) name = line["event:".Length..].Trim();
+                else if (line.StartsWith("data:", StringComparison.Ordinal)) data.Append(line["data:".Length..].TrimStart());
+                // lines starting with ':' are comments
+            }
+        }
+    }
+
+    private static JsonElement? TryParse(string json)
+    {
+        try { return JsonDocument.Parse(json).RootElement.Clone(); }
+        catch (JsonException) { return null; }
+    }
+
+    private static AiChatEvent Error(string code) =>
+        new("error", JsonDocument.Parse($"{{\"code\":\"{code}\"}}").RootElement.Clone());
+
+    public ValueTask DisposeAsync()
+    {
+        response.Dispose();
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>Remembers the AI service's status for a few seconds so the UI can poll it cheaply (Doc 02 §5.2).</summary>
+public sealed class AiStatusCache(IOptions<AiOptions> options, TimeProvider time) : IDisposable
+{
+    private readonly SemaphoreSlim _gate = new(1, 1);
+    private AiStatusInfo? _value;
+    private DateTimeOffset _expires;
+
+    public async Task<AiStatusInfo> GetAsync(Func<Task<AiStatusInfo>> load, CancellationToken ct)
+    {
+        if (_value is not null && time.GetUtcNow() < _expires) return _value;
+        await _gate.WaitAsync(ct);
+        try
+        {
+            if (_value is not null && time.GetUtcNow() < _expires) return _value;
+            _value = await load();
+            _expires = time.GetUtcNow().AddSeconds(options.Value.StatusCacheSeconds);
+            return _value;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public void Dispose() => _gate.Dispose();
+}
+
+/// <summary>Used when the AI service is switched off: indexing events complete without doing anything.</summary>
+public sealed class DisabledAiClient : IAiClient
+{
+    public Task IndexAsync(Guid userId, Guid resourceId, AiIndexRequest request, CancellationToken ct) => Task.CompletedTask;
+    public Task DeleteIndexAsync(Guid userId, Guid resourceId, bool forget, CancellationToken ct) => Task.CompletedTask;
+    public Task PurgeUserAsync(Guid userId, CancellationToken ct) => Task.CompletedTask;
+
+    public Task<AiSummary> SummarizeAsync(Guid userId, Guid? resourceId, string? title, string? description, string? text, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiTagSuggestion>> SuggestTagsAsync(
+        Guid userId, Guid? resourceId, string? title, string? description, string? text,
+        IReadOnlyCollection<string> existingTags, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<AiUsageInfo> GetUsageAsync(Guid userId, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiAdminUsageRow>> GetAdminUsageAsync(Guid? userId, CancellationToken ct) => Off<IReadOnlyList<AiAdminUsageRow>>();
+
+    public Task<AiChatSession> CreateChatSessionAsync(Guid userId, Guid? scopeCollectionId, CancellationToken ct) => Off<AiChatSession>();
+    public Task<IReadOnlyList<AiChatSession>> ListChatSessionsAsync(Guid userId, CancellationToken ct) => Off<IReadOnlyList<AiChatSession>>();
+    public Task<AiChatDetail> GetChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct) => Off<AiChatDetail>();
+    public Task<AiChatSession> RenameChatSessionAsync(Guid userId, Guid sessionId, string title, CancellationToken ct) => Off<AiChatSession>();
+    public Task DeleteChatSessionAsync(Guid userId, Guid sessionId, CancellationToken ct) => Off<object>();
+    public Task<IAiChatAnswer> OpenChatAsync(Guid userId, Guid sessionId, string content, CancellationToken ct) => Off<IAiChatAnswer>();
+
+    private static Task<T> Off<T>() => throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiSearchHit>> SearchAsync(Guid userId, string query, int limit, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<IReadOnlyList<AiRelatedHit>> RelatedAsync(Guid userId, Guid resourceId, int limit, CancellationToken ct) =>
+        throw new AiUnavailableException("AI features are switched off.");
+
+    public Task<AiStatusInfo> GetStatusAsync(CancellationToken ct) => Task.FromResult(new AiStatusInfo(false, "free", false));
+}

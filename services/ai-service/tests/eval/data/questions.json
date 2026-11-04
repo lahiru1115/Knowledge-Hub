@@ -1,0 +1,213 @@
+[
+ {
+  "id": "q01",
+  "question": "What did I save about B-trees?",
+  "kind": "answerable",
+  "expected": [
+   "r01"
+  ],
+  "must_include_any": [
+   "split",
+   "sorted",
+   "disk"
+  ]
+ },
+ {
+  "id": "q02",
+  "question": "How does Dijkstra's algorithm pick the next node?",
+  "kind": "answerable",
+  "expected": [
+   "r04"
+  ],
+  "must_include_any": [
+   "priority queue",
+   "smallest"
+  ]
+ },
+ {
+  "id": "q03",
+  "question": "What is the difference between a process and a thread?",
+  "kind": "answerable",
+  "expected": [
+   "r05"
+  ],
+  "must_include_any": [
+   "share",
+   "memory"
+  ]
+ },
+ {
+  "id": "q04",
+  "question": "What happens when a program causes a page fault?",
+  "kind": "answerable",
+  "expected": [
+   "r06"
+  ],
+  "must_include_any": [
+   "disk",
+   "page table"
+  ]
+ },
+ {
+  "id": "q05",
+  "question": "How does TCP set up a connection?",
+  "kind": "answerable",
+  "expected": [
+   "r07"
+  ],
+  "must_include_any": [
+   "syn"
+  ]
+ },
+ {
+  "id": "q06",
+  "question": "What rule of thumb should I use for the Postgres connection pool size?",
+  "kind": "answerable",
+  "expected": [
+   "r13"
+  ],
+  "must_include_any": [
+   "cores",
+   "two"
+  ]
+ },
+ {
+  "id": "q07",
+  "question": "Which isolation level prevents dirty reads?",
+  "kind": "answerable",
+  "expected": [
+   "r12"
+  ],
+  "must_include_any": [
+   "read committed"
+  ]
+ },
+ {
+  "id": "q08",
+  "question": "How do I avoid SQL injection?",
+  "kind": "answerable",
+  "expected": [
+   "r26"
+  ],
+  "must_include_any": [
+   "parameter",
+   "prepared"
+  ]
+ },
+ {
+  "id": "q09",
+  "question": "What is the cache-aside pattern?",
+  "kind": "answerable",
+  "expected": [
+   "r19"
+  ],
+  "must_include_any": [
+   "miss",
+   "load"
+  ]
+ },
+ {
+  "id": "q10",
+  "question": "Why use refresh token rotation?",
+  "kind": "answerable",
+  "expected": [
+   "r21"
+  ],
+  "must_include_any": [
+   "stolen",
+   "reuse",
+   "old"
+  ]
+ },
+ {
+  "id": "q11",
+  "question": "ways to stop clients from sending too many requests",
+  "kind": "paraphrase",
+  "expected": [
+   "r23"
+  ],
+  "must_include_any": [
+   "token bucket",
+   "bucket",
+   "429"
+  ]
+ },
+ {
+  "id": "q12",
+  "question": "how can I make sure a notification that is handled twice has no extra side effects",
+  "kind": "paraphrase",
+  "expected": [
+   "r24"
+  ],
+  "must_include_any": [
+   "idempotent"
+  ]
+ },
+ {
+  "id": "q13",
+  "question": "keeping the final image small when containerising an application",
+  "kind": "paraphrase",
+  "expected": [
+   "r16"
+  ],
+  "must_include_any": [
+   "multi-stage",
+   "stage"
+  ]
+ },
+ {
+  "id": "q14",
+  "question": "what to do when a model memorises its training examples",
+  "kind": "paraphrase",
+  "expected": [
+   "r10"
+  ],
+  "must_include_any": [
+   "regulari",
+   "cross-validation",
+   "dropout"
+  ]
+ },
+ {
+  "id": "q15",
+  "question": "What is the capital of Australia?",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ },
+ {
+  "id": "q16",
+  "question": "How do I change a bicycle tyre?",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ },
+ {
+  "id": "q17",
+  "question": "What did I save about Kubernetes operators and custom resources?",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ },
+ {
+  "id": "q18",
+  "question": "Summarise my notes on Rust lifetimes.",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ },
+ {
+  "id": "q19",
+  "question": "Who won the 2022 football world cup?",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ },
+ {
+  "id": "q20",
+  "question": "What hydration percentage should my sourdough dough have?",
+  "kind": "unanswerable",
+  "expected": [],
+  "must_include_any": []
+ }
+]

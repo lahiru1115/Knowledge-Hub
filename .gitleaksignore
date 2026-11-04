@@ -1,0 +1,5 @@
+# Findings reviewed and accepted, one fingerprint per line (commit:file:rule:line), as gitleaks prints them.
+#
+# The integration test host's throwaway JWT signing key, in the commit that first added it. It signs tokens only
+# inside the in-memory test server and protects nothing. (The value is also allowed in .gitleaks.toml.)
+279831e6b0cc7a2fa31ce06fae8a057bd680995c:services/core-api/tests/KnowledgeHub.IntegrationTests/ApiFactory.cs:generic-api-key:8
