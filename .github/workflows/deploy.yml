@@ -84,7 +84,7 @@ jobs:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
           key: ${{ secrets.DEPLOY_SSH_KEY }}
-          source: infra/deploy/compose.yaml,infra/deploy/Caddyfile,infra/deploy/Caddyfile.same-origin,infra/deploy/backup.sh,infra/deploy/make-init.sh
+          source: infra/deploy/compose.yaml,infra/deploy/Caddyfile,infra/deploy/Caddyfile.same-origin,infra/deploy/backup.sh,infra/deploy/make-init.sh,infra/db/init.sql
           target: ~/knowledge-hub
           strip_components: 2
       - name: Pull, migrate, restart
