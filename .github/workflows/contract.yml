@@ -48,6 +48,7 @@ jobs:
       - name: Migrate and build
         working-directory: services/core-api
         run: |
+          dotnet restore   # `dotnet ef` builds the project but does not restore it, so on a clean checkout it fails
           dotnet tool install --global dotnet-ef --version "10.0.*"
           dotnet ef database update --project src/KnowledgeHub.Infrastructure --connection \
             "Host=localhost;Database=knowledge_hub;Username=core_migrator;Password=core_migrator_dev"
@@ -69,4 +70,4 @@ jobs:
         run: contracts/run-schemathesis.sh http://localhost:8080
       - name: API log
         if: failure()
-        run: tail -n 200 "$RUNNER_TEMP/api.log"
+        run: tail -n 200 "$RUNNER_TEMP/api.log" || echo "The API never started, so there is no log."

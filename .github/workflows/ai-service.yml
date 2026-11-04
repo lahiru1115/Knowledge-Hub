@@ -57,4 +57,4 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build the image
-        run: docker build services/ai-service
+        run: docker build .   # this job already runs in services/ai-service (defaults.run.working-directory)
