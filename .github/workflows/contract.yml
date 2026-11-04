@@ -1,10 +1,8 @@
 name: contract
 on:
   pull_request:
-    paths: ["contracts/**", "services/core-api/**", ".github/workflows/contract.yml"]
   push:
     branches: [main]
-    paths: ["contracts/**", "services/core-api/**", ".github/workflows/contract.yml"]
 permissions:
   contents: read
 concurrency:

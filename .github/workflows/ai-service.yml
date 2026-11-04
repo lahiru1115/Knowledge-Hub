@@ -1,10 +1,8 @@
 name: ai-service
 on:
   pull_request:
-    paths: ["services/ai-service/**", "infra/db/**", ".github/workflows/ai-service.yml"]
   push:
     branches: [main]
-    paths: ["services/ai-service/**", "infra/db/**", ".github/workflows/ai-service.yml"]
 permissions:
   contents: read
 concurrency:

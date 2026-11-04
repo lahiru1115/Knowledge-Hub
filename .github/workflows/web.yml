@@ -1,10 +1,8 @@
 name: web
 on:
   pull_request:
-    paths: ["apps/web/**", "contracts/**", ".github/workflows/web.yml"]
   push:
     branches: [main]
-    paths: ["apps/web/**", "contracts/**", ".github/workflows/web.yml"]
 permissions:
   contents: read
 concurrency:
