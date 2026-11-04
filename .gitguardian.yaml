@@ -1,0 +1,17 @@
+# GitGuardian scan settings. Only the local development database passwords are ignored, by value, so a real
+# secret in the same files is still reported. They are placeholders for a throwaway database on localhost or in a CI
+# container (infra/db/init.sql, compose.yaml, the workflows, the tests); real deployments generate their own
+# (infra/deploy/make-init.sh).
+version: 2
+secret:
+  ignored-matches:
+    - name: Local development password for the core_migrator database role
+      match: core_migrator_dev
+    - name: Local development password for the core_app database role
+      match: core_app_dev
+    - name: Local development password for the ai_migrator database role
+      match: ai_migrator_dev
+    - name: Local development password for the ai_app database role
+      match: ai_app_dev
+    - name: Default password of the throwaway local and CI PostgreSQL superuser
+      match: postgres
