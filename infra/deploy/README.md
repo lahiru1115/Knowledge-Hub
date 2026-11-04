@@ -24,9 +24,17 @@ the first deployment will find things. "Check on first deployment" says what to 
 1. **VM.** Ampere A1, **2 OCPU / 12 GB** (the reported current Always Free limit). Install Docker and the compose plugin.
    Open ports 80, 443 and 22 only. Point a DNS name (`SITE_HOST`) at it. Log in to GHCR so it can pull
    (`docker login ghcr.io` with a token that can read packages).
-2. **Files and secrets.** Copy this directory to `~/knowledge-hub`. `cp .env.example .env`, fill in the secrets
-   (`openssl rand -base64 48`), then `./make-init.sh >> .env`. That sets the local database up with fresh passwords.
-   Keep `.env` and `init.local.sql` out of git (the `.gitignore` here does).
+2. **Files and secrets.** On the VM, `mkdir -p ~/knowledge-hub`. From a checkout of this repository, copy the files the
+   first start needs (the workflow keeps them up to date afterwards):
+
+   ```bash
+   scp infra/deploy/compose.yaml infra/deploy/Caddyfile.same-origin infra/deploy/make-init.sh \
+       infra/deploy/backup.sh infra/deploy/.env.example infra/db/init.sql  USER@HOST:~/knowledge-hub/
+   ```
+
+   Then on the VM, in `~/knowledge-hub`: `cp .env.example .env`, fill in the secrets (`openssl rand -base64 48`), and run
+   `./make-init.sh >> .env`. That sets the local database up with fresh passwords (it needs `init.sql` in the same
+   folder, and refuses to leave a half-made file if anything goes wrong). Keep `.env` and `init.local.sql` out of git.
 3. **Email.** Create a Brevo account, verify the sending domain (add its SPF and DKIM records in DNS), create an SMTP key,
    and fill in `SMTP_*` in `.env`.
 4. **GitHub.** Repository variable `DEPLOY_ENABLED=true`. Secrets: `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`,
