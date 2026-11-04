@@ -15,3 +15,15 @@ secret:
       match: ai_app_dev
     - name: Default password of the throwaway local and CI PostgreSQL superuser
       match: postgres
+    - name: Test-only signing key or shared secret
+      match: a-different-secret-0123456789abcdefghij
+    - name: Test-only signing key or shared secret
+      match: ci-signing-key-0123456789abcdef0123456789
+    - name: Test-only signing key or shared secret
+      match: integration-service-secret-0123456789abcdef
+    - name: Test-only signing key or shared secret
+      match: integration-test-signing-key-0123456789abcdef
+    - name: Test-only signing key or shared secret
+      match: unit-test-service-secret-0123456789abcdef
+    - name: Test-only signing key or shared secret
+      match: unit-test-signing-key-that-is-long-enough-0123456789

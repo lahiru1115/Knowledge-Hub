@@ -21,3 +21,10 @@ regexTarget = "match"
 regexes = [
   '''(?i)password["']?\s*[:=]\s*["']?(\$\{[A-Za-z_]+:-)?postgres(["'}\s]|$)''',
 ]
+
+[[allowlists]]
+description = "Throwaway signing keys and shared secrets that only the test hosts and the CI job use (never a real deployment's)"
+regexTarget = "match"
+regexes = [
+  '''(a-different-secret-0123456789abcdefghij|ci-signing-key-0123456789abcdef0123456789|integration-service-secret-0123456789abcdef|integration-test-signing-key-0123456789abcdef|unit-test-service-secret-0123456789abcdef|unit-test-signing-key-that-is-long-enough-0123456789)(?:[^A-Za-z0-9-]|$)''',
+]
