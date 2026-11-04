@@ -187,7 +187,7 @@ public sealed class CollectionService(IAppDbContext db, IClock clock, IOutbox ou
 
     private static string? ValidateColor(string? input, FieldErrors errors)
     {
-        if (string.IsNullOrEmpty(input)) return null;
+        if (input is null) return null;   // no colour is null; an empty string is not one of the colours
         if (!CollectionColors.All.Contains(input)) errors.Add("color", $"Must be one of: {string.Join(", ", CollectionColors.All)}.");
         return input;
     }

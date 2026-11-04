@@ -781,6 +781,7 @@ export interface components {
          * @description UUIDv7
          */
         Id: string;
+        /** @description Lowercased; any letters or digits (not only ASCII), spaces and - _ . # +. There is no `pattern` because a pattern for "any Unicode letter" is not portable (\p{L} is not valid in every regular expression flavour). */
         TagName: string;
         /** @enum {string} */
         ResourceType: "article" | "video" | "pdf" | "course" | "repo" | "website" | "other";

@@ -397,7 +397,7 @@ paths:
           description: Repeatable; all must match
           style: form
           explode: true
-          schema: { type: array, items: { $ref: '#/components/schemas/TagName' } }
+          schema: { type: array, maxItems: 20, items: { $ref: '#/components/schemas/TagName' } }
         - name: collection_id
           in: query
           description: A collection ID, or the literal `inbox`
@@ -1244,7 +1244,9 @@ components:
       type: string
       minLength: 1
       maxLength: 50
-      pattern: '^[a-z0-9 _.#+-]+$'
+      description: >-
+        Lowercased; any letters or digits (not only ASCII), spaces and - _ . # +. There is no `pattern` because a
+        pattern for "any Unicode letter" is not portable (\p{L} is not valid in every regular expression flavour).
     ResourceType:
       type: string
       enum: [article, video, pdf, course, repo, website, other]

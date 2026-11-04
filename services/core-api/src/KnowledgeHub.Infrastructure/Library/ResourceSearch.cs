@@ -23,7 +23,13 @@ public sealed partial class ResourceSearch(AppDbContext db) : IResourceSearch
         q = filter.Archived ? q.Where(r => r.IsArchived) : q.Where(r => !r.IsArchived);
         if (filter.Types.Count > 0) q = q.Where(r => filter.Types.Contains(r.Type));
         // All the given tags must match.
-        foreach (var tag in filter.Tags) q = q.Where(r => r.ResourceTags.Any(rt => rt.Tag.Name == tag));
+        // One condition however many tags: the resource must have as many of the named tags as were asked for. A
+        // condition per tag grew the query with each one and the planner's time with it. (A resource has each tag once.)
+        if (filter.Tags.Count > 0)
+        {
+            var wanted = filter.Tags.Distinct().ToArray();
+            q = q.Where(r => r.ResourceTags.Count(rt => wanted.Contains(rt.Tag.Name)) == wanted.Length);
+        }
         if (filter.Inbox) q = q.Where(r => r.CollectionId == null);
         else if (filter.CollectionId is { } collectionId) q = q.Where(r => r.CollectionId == collectionId);
         if (filter.Favourite is { } fav) q = q.Where(r => r.IsFavourite == fav);

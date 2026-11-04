@@ -117,7 +117,8 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         var summary = input.Summary.IsSet ? ValidateText(input.Summary.Value, "summary", 2000, errors) : null;
         if (input.Type is { } t && !Enum.IsDefined(t)) errors.Add("type", "Not a valid type.");
         var tagNames = input.Tags is null ? null : TagResolver.Normalize(input.Tags, "tags", errors);
-        var aiNames = tagNames is null ? [] : AiSubset(input.AiTags, tagNames, errors);
+        // Without `tags` there is nothing to be a subset of, but the names must still be valid tag names.
+        var aiNames = tagNames is null ? [.. TagResolver.Normalize(input.AiTags, "ai_tags", errors)] : AiSubset(input.AiTags, tagNames, errors);
         errors.ThrowIfAny();
         if (input.CollectionId is { IsSet: true, Value: { } collectionId }) await EnsureCollectionAsync(userId, collectionId, ct);
 
@@ -341,8 +342,15 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         var tags = new List<string>();
         foreach (var raw in r.Tag ?? [])
         {
-            if (TagNames.TryNormalize(raw, out var name)) tags.Add(name);
+            if (TagNames.TryNormalize(raw, out var name)) { if (!tags.Contains(name)) tags.Add(name); }
             else errors.Add("tag", $"'{raw}' is not a valid tag.");
+            // A resource has at most this many tags, so a longer list can never match; refusing it also keeps the
+            // query small (one condition per tag made it take tens of seconds at 40 tags).
+            if (tags.Count > TagNames.MaxPerResource)
+            {
+                errors.Add("tag", $"Filter by at most {TagNames.MaxPerResource} tags.");
+                break;
+            }
         }
 
         Guid? collectionId = null;
@@ -358,8 +366,9 @@ public sealed class ResourceService(IAppDbContext db, IClock clock, IResourceSea
         if (r.Q is { Length: > MaxQueryLength }) errors.Add("q", $"Use {MaxQueryLength} characters or fewer.");
         var hasQuery = !string.IsNullOrEmpty(query);
         ResourceSort sort;
-        if (string.IsNullOrEmpty(r.Sort)) sort = hasQuery ? ResourceSort.Relevance : ResourceSort.Newest;
-        else if (!Enum.TryParse(r.Sort, ignoreCase: true, out sort) || !Enum.IsDefined(sort) || char.IsDigit(r.Sort[0]))
+        // Left out means the default; given but empty is not one of the values, so it is refused like any other.
+        if (r.Sort is null) sort = hasQuery ? ResourceSort.Relevance : ResourceSort.Newest;
+        else if (r.Sort.Length == 0 || !Enum.TryParse(r.Sort, ignoreCase: true, out sort) || !Enum.IsDefined(sort) || char.IsDigit(r.Sort[0]))
         {
             errors.Add("sort", "Use relevance, newest, oldest, title or updated.");
             sort = ResourceSort.Newest;

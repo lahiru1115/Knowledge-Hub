@@ -93,3 +93,7 @@ checks.positive_data_acceptance.enabled = false
 # "Restore" answers 404 for a resource that is not in the trash, so a restore straight after a create is a rightful 404.
 [checks.ensure_resource_availability]
 enabled = false
+
+[[operations]]
+include-name = "PATCH /tags/{id}"
+checks.positive_data_acceptance.enabled = false   # a tag name is any letters, digits, spaces and - _ . # +, which no portable pattern says

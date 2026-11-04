@@ -24,6 +24,9 @@ curl -fsS -b "$jar" -c "$jar" -H "X-CSRF-Token: $csrf" -H 'Content-Type: applica
 token="$(cookie kh_at)"
 csrf="$(cookie kh_csrf)"
 
+# Schemathesis keeps a cache in the directory it runs from; keep it out of the repository.
+cd "$(mktemp -d)"
+
 # Health checks live outside /api/v1, saved views and OAuth are not built yet (Could), and the session-ending calls
 # would invalidate the cookie in the middle of the run.
 exec uvx --from 'schemathesis==4.33.0' schemathesis --config-file "$here/schemathesis.toml" run "$here/openapi.yaml" \
