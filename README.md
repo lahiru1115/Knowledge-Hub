@@ -22,13 +22,22 @@ every stage ([04](docs/04-build-order.md)), and the decision records in [`docs/a
 
 ## Run it locally
 
-You need PostgreSQL 16+ with pgvector, the .NET 10 SDK, Node 22 and `uv`. `docker compose up -d postgres migrate-core`
-starts the database with the roles from `infra/db/init.sql` and the Core API's tables. The compose file has no
-application services yet, so the apps run from their folders:
+With Docker, from the repository root:
 
 ```bash
-cp .env.example .env    # local defaults; read the comments
+cp .env.example .env     # optional: every setting has a development default
+docker compose up
 ```
+
+Open http://localhost:5173. The first start builds the images and downloads the chat model (about 2 GB), so give it a
+few minutes; chat answers appear once the download ends, everything else works meanwhile. Register an account, and
+register `admin@example.com` (or your `ADMIN_EMAIL`) to get the administrator. Password-reset emails land in Mailpit at
+http://localhost:8025, traces in Jaeger at http://localhost:16686, the API on :8080 and the AI service on :8000.
+
+The web container runs the Vite dev server on your files, so edits to `apps/web/src` reload at once. The two .NET and
+Python services are built into images: rebuild one with `docker compose up --build core-api`.
+
+Without Docker you need PostgreSQL 16+ with pgvector (`infra/db/init.sql` applied), the .NET 10 SDK, Node 22 and `uv`:
 
 **Core API** (http://localhost:8080):
 
@@ -38,6 +47,8 @@ ConnectionStrings__Core="Host=localhost;Database=knowledge_hub;Username=core_app
 Auth__SigningKey="a-local-signing-key-of-at-least-32-bytes" Auth__SecureCookies=false \
 ASPNETCORE_URLS=http://localhost:8080 dotnet run --project src/KnowledgeHub.Api
 ```
+
+Create its tables first with `dotnet ef database update --project src/KnowledgeHub.Infrastructure --connection "Host=localhost;Database=knowledge_hub;Username=core_migrator;Password=core_migrator_dev"`.
 
 **AI service** (optional; the app works without it and says so; http://localhost:8000):
 
@@ -58,8 +69,6 @@ cd apps/web
 npm ci
 npm run dev
 ```
-
-Password reset emails go to the SMTP server in `Smtp__Host`/`Smtp__Port` (Mailpit in `compose.yaml`).
 
 ## Tests
 

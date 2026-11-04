@@ -1,5 +1,9 @@
-# Local stack (Doc 02 §10.1). Infrastructure plus migrate-core so far; core-api, ai-service, migrate-ai
-# and web are added to this file as each Dockerfile lands.
+# Local stack (Doc 02 §10.1): `docker compose up` from the repository root, then open http://localhost:5173.
+# Settings come from .env (copy .env.example); every secret here has a development default, so it also runs without one.
+# Not for production: see infra/deploy/ for that. The first start downloads the chat model (about 2 GB, by
+# `ollama-pull`) and builds three images. Chat answers appear only once that download finishes; everything else works
+# meanwhile. To skip the model, run `docker compose up --scale ollama=0 --scale ollama-pull=0` (the AI features then
+# report themselves unavailable, which the app handles) or use AI_PROFILE=claude with keys in .env.
 name: knowledge-hub
 services:
   postgres:
@@ -26,10 +30,82 @@ services:
     environment:
       CORE_MIGRATOR_CONNECTION: Host=postgres;Database=knowledge_hub;Username=core_migrator;Password=core_migrator_dev
     restart: "no"
+  migrate-ai:
+    build: ./services/ai-service
+    command: ["alembic", "upgrade", "head"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      AI_MIGRATOR_DATABASE_URL: postgresql://ai_migrator:ai_migrator_dev@postgres/knowledge_hub
+    restart: "no"
+  core-api:
+    build: ./services/core-api
+    depends_on:
+      migrate-core:
+        condition: service_completed_successfully
+      mailpit:
+        condition: service_started
+    ports: ["8080:8080"]
+    environment:
+      ConnectionStrings__Core: Host=postgres;Database=knowledge_hub;Username=core_app;Password=core_app_dev
+      Auth__SigningKey: ${Auth__SigningKey:-local-development-signing-key-not-for-production-use}
+      Auth__AdminEmail: ${ADMIN_EMAIL:-admin@example.com}
+      Auth__AppBaseUrl: http://localhost:5173
+      Auth__SecureCookies: "false"          # the browser talks to http://localhost, where Secure cookies are not kept
+      AiService__Enabled: ${AI_ENABLED:-true}   # not AiService__Enabled: .env.example sets that to false for runs outside Docker
+      AiService__BaseUrl: http://ai-service:8000
+      AiService__JwtSecret: ${SERVICE_JWT_SECRET:-local-development-service-secret-not-for-production}
+      Smtp__Host: mailpit
+      Smtp__Port: "1025"
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://jaeger:4317   # traces and metrics; Jaeger shows the traces on :16686
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf \"GET /health/live HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q live <&3'"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+      start_period: 15s
+  ai-service:
+    build: ./services/ai-service
+    depends_on:
+      migrate-ai:
+        condition: service_completed_successfully
+    ports: ["8000:8000"]
+    environment:
+      AI_DATABASE_URL: postgresql://ai_app:ai_app_dev@postgres/knowledge_hub
+      SERVICE_JWT_SECRET: ${SERVICE_JWT_SECRET:-local-development-service-secret-not-for-production}
+      AI_PROFILE: ${AI_PROFILE:-free}
+      OLLAMA_BASE_URL: http://ollama:11434
+      MODEL_CACHE_DIR: /models
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      PRICE_TABLE: ${PRICE_TABLE:-}
+    volumes: [models:/models]               # the embedding model is downloaded once, on first use
+  web:
+    image: node:22-bookworm-slim   # not alpine: the build tools' native binaries expect glibc
+    working_dir: /app
+    command: sh -c "npm ci --ignore-scripts && npm run dev -- --host 0.0.0.0"
+    depends_on:
+      core-api:
+        condition: service_healthy
+    ports: ["5173:5173"]
+    environment:
+      VITE_API_TARGET: http://core-api:8080   # the Vite dev server proxies /api here (same origin, as in production)
+    volumes:
+      - ./apps/web:/app
+      - web-node-modules:/app/node_modules    # so the container's packages do not clash with the host's
   ollama:
     image: ollama/ollama:latest
     ports: ["11434:11434"]
     volumes: [ollama:/root/.ollama]
+  ollama-pull:
+    image: ollama/ollama:latest
+    depends_on: [ollama]
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["ollama", "pull", "${LLM_MODEL:-llama3.2:3b}"]
+    restart: "no"
   mailpit:
     image: axllent/mailpit:latest
     ports: ["1025:1025", "8025:8025"]
@@ -39,3 +115,5 @@ services:
 volumes:
   pgdata:
   ollama:
+  models:
+  web-node-modules:

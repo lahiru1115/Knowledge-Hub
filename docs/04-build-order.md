@@ -57,7 +57,7 @@ built in `ContractDriftTests`.
 
 - Monorepo folders, documents in `docs/`, 11 ADRs in `docs/adr/`.
 - `contracts/openapi.yaml` (57 operations) and `schemathesis.toml`.
-- `compose.yaml` (infrastructure only), `infra/db/init.sql`, `.env.example`.
+- `compose.yaml` (the whole local stack: database, migrations, Core API, AI service, web, Ollama, Mailpit, Jaeger), `infra/db/init.sql`, `.env.example`. Written without Docker available, so never started.
 - Core API solution skeleton, built and tested (Stage 1).
 
 ## Stage 1 — Make the skeleton real (done)
